@@ -24,5 +24,9 @@ GitHub Issue 駆動開発のための Claude Code スキル集です。
 ## インストール
 
 ```bash
+# 全スキル
+npx skills add tanabee/skills --skill '*'
+
+# 対話的に選択
 npx skills add tanabee/skills
 ```

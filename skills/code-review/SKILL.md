@@ -2,6 +2,7 @@
 name: code-review
 description: コードレビューを行う。PR が存在する場合は PR を、ローカルブランチの場合はメインブランチとの差分をレビューする。
 allowed-tools: Bash, Read, Glob, Grep, Task
+context: fork
 ---
 
 コードレビューを行う。`$ARGUMENTS` は PR 番号（`123`、`#123`）、URL、または空。

@@ -12,4 +12,4 @@ GitHub issue から PR のタイトルと説明文を作成する。`$ARGUMENTS`
 2. `tmp/issues/<issue番号>/plan.md` や `tmp/issues/<issue番号>/checklist.md` が既にある場合はその内容を活用する
 3. `gh issue view` で issue を取得する
 4. `git log main..HEAD --stat` でコミット単位の変更概要を確認し、必要に応じて `git show <hash>` で個別のコミット内容を把握する
-5. 結果を Write ツールで `tmp/issues/<issue番号>/pr.md` に書き込む（フォーマットは [sample.md](./examples/sample.md) を参照）
+5. 結果を Write ツールで `tmp/issues/<issue番号>/pr.md` に書き込む（フォーマットは [template.md](./assets/template.md) を参照）

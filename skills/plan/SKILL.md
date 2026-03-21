@@ -12,7 +12,7 @@ GitHub issue ( $ARGUMENTS ) から実装計画を作成する。`$ARGUMENTS` は
 4. コードベースを調査し、実装方法の候補を 3 つ程度洗い出す
 5. 各候補の概要・メリット・デメリットを提示し、ユーザーに選択してもらう（自由入力でのフィードバックも受け付ける）
 6. 選択された方法をもとに、各タスクの影響範囲（対象ファイル・関数）、具体的な変更内容、完了条件を特定する
-7. 結果を Write ツールで `tmp/issues/<issue番号>/plan.md` に書き込む（フォーマットは [sample.md](./examples/sample.md) を参照）
+7. 結果を Write ツールで `tmp/issues/<issue番号>/plan.md` に書き込む（フォーマットは [template.md](./assets/template.md) を参照）
 
 ## 注意事項
 

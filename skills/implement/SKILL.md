@@ -11,7 +11,7 @@ GitHub issue ( $ARGUMENTS ) の内容をもとに実装を行う。`$ARGUMENTS` 
 3. `plan.md` のタスクを上から順に実装する。各タスクの影響範囲に記載されたファイルを確認してから変更する
 4. 各タスクの完了条件を満たしていることを確認し、タスク単位でコミットしてから次のタスクに進む
 5. 全タスク完了後、既存のテストがあれば実行して通ることを確認する
-6. 実装の解説を `tmp/issues/<issue番号>/report.md` に書き込む（フォーマットは [sample.md](./examples/sample.md) を参照）
+6. 実装の解説を `tmp/issues/<issue番号>/report.md` に書き込む（フォーマットは [template.md](./assets/template.md) を参照）
 
 ## 注意事項
 

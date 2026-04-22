@@ -1,6 +1,6 @@
 ---
 name: review
-description: コードレビューを行う。PR が存在する場合は PR を、ローカルブランチの場合はメインブランチとの差分をレビューする。使用する AI CLI（claude/gemini/codex/all/self）を指定する。
+description: コードレビューを行う。PR が存在する場合は PR を、ローカルブランチの場合はメインブランチとの差分をレビューする。使用する AI CLI（claude/codex/all/self）を指定する。
 allowed-tools: Bash, BashOutput, Read, Glob, Grep, Task, AskUserQuestion
 ---
 
@@ -10,27 +10,25 @@ allowed-tools: Bash, BashOutput, Read, Glob, Grep, Task, AskUserQuestion
 
 `$ARGUMENTS` は `[<モード>] [<PR 番号/URL>]` 形式。
 
-- **モード**: `claude` | `gemini` | `codex` | `all` | `self`（必須。`self` はサブ CLI から呼ばれる terminal 用の内部モード）
+- **モード**: `claude` | `codex` | `all` | `self`（必須。`self` はサブ CLI から呼ばれる terminal 用の内部モード）
 - **PR 番号/URL**: `123`、`#123`、または PR URL（省略可）
 
 先頭トークンが上記モードのいずれかならモード、それ以外は PR 番号/URL として扱う。
 
 使用例:
 - `/review claude` — 現ブランチ/PR を Claude Code でレビューし、ファイルに保存
-- `/review gemini 123` — PR #123 を Gemini CLI でレビュー
 - `/review codex 123` — PR #123 を Codex でレビュー
-- `/review all 123` — PR #123 を Claude Code / Gemini CLI / Codex CLI 全てでレビュー
+- `/review all 123` — PR #123 を Claude Code / Codex CLI 両方でレビュー
 - `/review self 123` — 実行中の CLI でレビューしてファイル保存（サブ CLI の内部使用、ユーザーは通常使わない）
 
 ## モード判定（最初に実行）
 
 **引数のパース直後、他の処理を始める前に、まずモードを判定する。**
 
-1. **モードが未指定の場合** → `AskUserQuestion` ツールでユーザーに以下の 4 択で質問する:
+1. **モードが未指定の場合** → `AskUserQuestion` ツールでユーザーに以下の 3 択で質問する:
    - `claude` — Claude Code のみでレビュー
-   - `gemini` — Gemini CLI のみでレビュー
    - `codex` — Codex CLI のみでレビュー
-   - `all` — 3 つ全てでレビュー
+   - `all` — 2 つでレビュー
 
    **禁止事項**: モード未指定のまま勝手に `self` やいずれかのモードにフォールバックして処理を始めないこと。必ず質問する。ただし `$ARGUMENTS` の先頭トークンが明示的に `self` の場合は質問せずに `self` モードとして処理する（サブ CLI からの呼び出し）。
 
@@ -38,7 +36,7 @@ allowed-tools: Bash, BashOutput, Read, Glob, Grep, Task, AskUserQuestion
 
 ## レビューの実施
 
-各モードの手順で「共通ステップ 1/2/3/4」と書かれた箇所は、末尾の「共通ステップ」セクションを参照する。**ディスパッチ系モード（`gemini` / `codex` / `all`）は本体側で共通ステップを実行しない**（サブ CLI 側の `self` モードで実行されるため、二重取得を避ける）。
+各モードの手順で「共通ステップ 1/2/3/4」と書かれた箇所は、末尾の「共通ステップ」セクションを参照する。**ディスパッチ系モード（`codex` / `all`）は本体側で共通ステップを実行しない**（サブ CLI 側の `self` モードで実行されるため、二重取得を避ける）。
 
 ### `claude` モード
 
@@ -47,19 +45,9 @@ allowed-tools: Bash, BashOutput, Read, Glob, Grep, Task, AskUserQuestion
 3. 共通ステップ 3（レビュー実施）に従ってレビューを行う
 4. 共通ステップ 4 で決めたパス（`suffix = claude-code`）に `review-claude-code.md` として保存
 
-### `gemini` モード
-
-1. 以下の bash コマンドを実行する。差分取得・情報収集・レビュー・保存はすべて Gemini CLI 側の `self` モードで行われるので、本体側では共通手順を実行しない:
-   ```bash
-   gemini -m gemini-3.1-pro -p "/review self <PR 番号/URL>"
-   ```
-2. 実行完了を待つ。
-
-**モデル指定（必須）**: `gemini` コマンドはデフォルトで軽量モデル（flash 系）にフォールバックしがちでレビュー品質が落ちる。**必ず `-m gemini-3.1-pro`（最新 Pro モデル）を明示する**。より新しい Pro モデルが出た場合はそちらを使う。
-
 ### `codex` モード
 
-1. 以下の bash コマンドを実行する。差分取得・情報収集・レビュー・保存はすべて Codex CLI 側の `self` モードで行われるので、本体側では共通手順を実行しない:
+1. 以下の bash コマンドを実行する。差分取得・情報収集・レビュー・保存はすべて Codex CLI 側の `self` モードで行われるので、本体側では共通ステップを実行しない:
    ```bash
    codex exec "/review self <PR 番号/URL>"
    ```
@@ -72,28 +60,27 @@ allowed-tools: Bash, BashOutput, Read, Glob, Grep, Task, AskUserQuestion
 1. 共通ステップ 1（差分の取得）を実行
 2. 共通ステップ 2（情報収集）を実行
 3. 共通ステップ 3（レビュー実施）に従ってレビューを行う
-4. 共通ステップ 4 で決めたパスに保存。`<suffix>` は実行中の CLI に対応するもの（Claude Code → `claude-code` / Gemini CLI → `gemini` / Codex CLI → `codex`）
+4. 共通ステップ 4 で決めたパスに保存。`<suffix>` は実行中の CLI に対応するもの（Claude Code → `claude-code` / Codex CLI → `codex`）
 
 ### `all` モード
 
-`claude` / `gemini` / `codex` の 3 モードを並列実行する。ディスパッチ役なので本体側では共通ステップ 1/2 は実行しない（各サブ実行側で個別に取得する）。`claude` モードの処理のみ本体で走らせる。
+`claude` / `codex` の 2 モードを並列実行する。ディスパッチ役なので本体側では共通ステップ 1/2 は実行しない（サブ実行側で個別に取得する）。`claude` モードの処理のみ本体で走らせる。
 
-**Step 1 — 最初に実行**: `gemini` モード・`codex` モードの bash コマンド（上記セクション参照）を `Bash` ツールで **`run_in_background: true` + 同じメッセージ内で 2 本並列** に起動する。**自分のレビューを書き始める前に必ず先に叩くこと**（書き始めてからだと起動を忘れやすい）。
+**Step 1 — 最初に実行**: `codex` モードの bash コマンド（上記セクション参照）を `Bash` ツールで **`run_in_background: true`** で起動する。**自分のレビューを書き始める前に必ず先に叩くこと**（書き始めてからだと起動を忘れやすい）。
 
-サブ CLI には必ず `self` モードを付ける（`gemini` / `codex` を渡すと無限再帰、未指定だと AskUserQuestion で止まる）。
+サブ CLI には必ず `self` モードを付ける（`codex` を渡すと無限再帰、未指定だと AskUserQuestion で止まる）。
 
 **Step 2**: Step 1 の bash 起動完了後（= shell_id が返った後）、`claude` モードの手順 1〜4 を実行する（ここで本体側の共通ステップ 1/2/3/4 が走る）。
 
-**Step 3**: `BashOutput` で両 shell_id をポーリングし、bg の両方が終了するまで待機する。
+**Step 3**: `BashOutput` で shell_id をポーリングし、bg が終了するまで待機する。
 
-**Step 4 — 完了検証（必須）**: 以下 3 ファイルが揃っているか `ls` で確認する:
+**Step 4 — 完了検証（必須）**: 以下 2 ファイルが揃っているか `ls` で確認する:
 - `tmp/(prs|issues)/<番号>/review-claude-code.md`
-- `tmp/(prs|issues)/<番号>/review-gemini.md`
 - `tmp/(prs|issues)/<番号>/review-codex.md`
 
-不足があれば、不足分の `gemini` / `codex` コマンド（上記セクション参照）を再実行する（最大 2 回まで）。3 ファイル揃ってから、ユーザーに 3 つのレビュー結果のサマリを提示する。
+不足があれば、不足分の `codex` コマンド（上記セクション参照）を再実行する（最大 2 回まで）。2 ファイル揃ってから、ユーザーに 2 つのレビュー結果のサマリを提示する。
 
-環境メモ: `gemini -p` / `codex exec` は非対話モードで動作する。対話的に止まる場合は `--yolo` 等の自動承認フラグを追加する。
+環境メモ: `codex exec` は非対話モードで動作する。対話的に止まる場合は `--yolo` 等の自動承認フラグを追加する。
 
 ## 共通ステップ（各モードから参照）
 
@@ -103,7 +90,7 @@ allowed-tools: Bash, BashOutput, Read, Glob, Grep, Task, AskUserQuestion
 
 PR 番号/URL と現在の状態からレビュー対象を判定する。
 
-- **PR 番号・URL が指定された場合**: `gh pr view` で PR 情報を取得し、`gh pr diff` で差分を取得（PR モード）
+- **PR 番号・URL が指定された場合**: `gh pr view` で PR 情報を取得し、`gh pr diff` で差分を取得(PR モード)
 - **PR 番号/URL が空の場合**: `gh pr view` を試み、現在のブランチに PR が存在するか確認する
   - PR が存在する → PR モードで差分を取得
   - PR が存在しない → `git diff main...HEAD` でメインブランチとの差分を取得（ローカルモード）
@@ -138,9 +125,8 @@ PR 番号/URL と現在の状態からレビュー対象を判定する。
 
 `<suffix>` はモードごとに:
 - `claude` → `claude-code`
-- `gemini` → `gemini`
 - `codex` → `codex`
-- `self` → 実行中の CLI に対応するもの（Claude Code → `claude-code` / Gemini CLI → `gemini` / Codex CLI → `codex`）
+- `self` → 実行中の CLI に対応するもの（Claude Code → `claude-code` / Codex CLI → `codex`）
 
 ローカルモードで issue 番号が不明な場合は、ユーザーに保存先を確認する。`mkdir -p` で出力先ディレクトリを作成してから書き込む。
 

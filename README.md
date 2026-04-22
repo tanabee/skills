@@ -11,7 +11,7 @@ GitHub Issue 駆動開発のための Claude Code スキル集です。
 | create-checklist | `/create-checklist <issue-url>` | 正常系・異常系・エッジケースを網羅した受け入れテストチェックリストを生成 |
 | create-pr-text | `/create-pr-text <issue-url>` | Issue と計画から PR タイトル・説明文を作成 |
 | dev | `/dev <issue-url>` | 全ワークフローを一括実行: plan → implement → create-checklist → create-pr-text |
-| code-review | `/code-review [PR番号\|URL]` | コードレビューを実施。PR または メインブランチとの差分をレビュー |
+| review | `/review <claude\|gemini\|codex\|all> [PR番号\|URL]` | コードレビューを実施。PR または メインブランチとの差分を、指定した AI CLI でレビュー。モードを省略すると対話的に選択 |
 
 ## 出力
 

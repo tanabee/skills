@@ -13,7 +13,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成ま
 2. `/implement $ARGUMENTS` — 計画に基づいてコードを実装する
 3. `/create-checklist $ARGUMENTS` — 動作確認チェックリストを作成する
 4. `/create-pr-text $ARGUMENTS` — PR のタイトルと説明文を作成する
-5. `/code-review` — コードレビューを行う
+5. `/review` — コードレビューを行う
 6. `/notify-discord` — Discord に実施内容を簡潔にリッチテキスト形式で送信する
 
 ## 注意事項

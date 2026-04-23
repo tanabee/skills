@@ -21,8 +21,7 @@ cat << EOF > request.json
       "responseModalities": ["IMAGE", "TEXT"],
       "imageConfig": {
         "aspectRatio": "",
-        "imageSize": "1K",
-        "personGeneration": ""
+        "imageSize": "1K"
       }
     }
 }

@@ -7,7 +7,7 @@
 | エイリアス | モデル ID | 通称 | 特徴 | 料金（参考） |
 |-----------|-----------|------|------|-------------|
 | `flash` | `gemini-3.1-flash-image-preview` | Nano Banana 2 | 高スループット・低コスト。`thinkingConfig` 対応。Google Image Search グラウンディング対応 | $0.25 text input / $0.067 image output |
-| `pro` | `gemini-3-pro-image-preview` | Nano Banana Pro | 4K・複雑なレイアウト・テキスト描画に強い。`thinkingConfig` 非対応 | $2 text input / $0.134 image output |
+| `pro` | `gemini-3-pro-image-preview` | Nano Banana Pro | 4K・複雑なレイアウト・テキスト描画に強い。`thinkingConfig` / `personGeneration` 非対応 | $2 text input / $0.134 image output |
 
 ## `aspectRatio`
 
@@ -39,7 +39,9 @@
 | `2K` | ✅ | ✅ | |
 | `4K` | ✅ | ✅ | Pro はテキスト描画に強い |
 
-## `personGeneration`
+## `personGeneration`（Flash のみ）
+
+Pro では **このフィールドごと付与しない**（サポート外）。Flash で有効な値:
 
 | 値 | 説明 |
 |----|------|

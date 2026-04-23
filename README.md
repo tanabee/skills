@@ -12,6 +12,7 @@ GitHub Issue 駆動開発のための Claude Code スキル集です。
 | create-pr-text | `/create-pr-text <issue-url>` | Issue と計画から PR タイトル・説明文を作成 |
 | dev | `/dev <issue-url>` | 全ワークフローを一括実行: plan → implement → create-checklist → create-pr-text |
 | review | `/review <claude\|codex\|all> [PR番号\|URL]` | コードレビューを実施。PR または メインブランチとの差分を、指定した AI CLI でレビュー。モードを省略すると対話的に選択 |
+| nanobanana | `/nanobanana <プロンプト> [--model flash\|pro] [--aspect 16:9] [--size 1K] [--person allow_all]` | Gemini の画像生成モデル (nanobanana) で画像を生成し `tmp/images/` に保存。デフォルトは `flash` (gemini-3.1-flash-image-preview)、`--model pro` で `gemini-3-pro-image-preview`。API キーは環境変数 `GEMINI_API_KEY` から取得 |
 
 ## 出力
 

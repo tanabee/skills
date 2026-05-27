@@ -1,27 +1,63 @@
 # Skills
 
-GitHub Issue 駆動開発のための Claude Code スキル集です。
+GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 
 ## スキル一覧
 
+### Issue 駆動開発ワークフロー
+
 | スキル | コマンド | 説明 |
 |-------|---------|------|
-| plan | `/plan <issue-url>` | GitHub Issue とコードベースを分析し、3つの実装アプローチを提示して詳細な計画を作成 |
-| implement | `/implement <issue-url>` | 計画に基づいてコードを実装 |
-| create-checklist | `/create-checklist <issue-url>` | 正常系・異常系・エッジケースを網羅した受け入れテストチェックリストを生成 |
-| create-pr-text | `/create-pr-text <issue-url>` | Issue と計画から PR タイトル・説明文を作成 |
-| dev | `/dev <issue-url>` | 全ワークフローを一括実行: plan → implement → create-checklist → create-pr-text |
-| review | `/review <claude\|codex\|all> [PR番号\|URL]` | コードレビューを実施。PR または メインブランチとの差分を、指定した AI CLI でレビュー。モードを省略すると対話的に選択 |
-| nanobanana | `/nanobanana <プロンプト> [--model flash\|pro] [--aspect 16:9] [--size 1K] [--person allow_all]` | Gemini の画像生成モデル (nanobanana) で画像を生成し `tmp/images/` に保存。デフォルトは `flash` (gemini-3.1-flash-image-preview)、`--model pro` で `gemini-3-pro-image-preview`。API キーは環境変数 `GEMINI_API_KEY` から取得 |
+| dev | `/dev <issue> [auto\|normal\|careful]` | research → plan → review-plan → implement → create-checklist → create-pr-text → test → review → notify-discord を一気通貫で実行 |
+| research | `/research <issue>` | 受け入れ条件・影響範囲・実装方法の候補を整理する（選択は plan に委ねる） |
+| plan | `/plan <issue>` | research の結果をもとに実装方法を選択し、TDD ベースの実装計画を作成 |
+| review-plan | `/review-plan <issue>` | plan.md の影響範囲を独立視点で検証し、修正必須/任意改善として差し戻す |
+| implement | `/implement <issue>` | plan に基づいてコードを実装 |
+| create-checklist | `/create-checklist <issue>` | 正常系・異常系・エッジケースを網羅した動作確認チェックリストを生成 |
+| create-pr-text | `/create-pr-text <issue>` | Issue と計画から PR タイトル・説明文を作成（PR 自体は作成しない） |
+| test | `/test <issue>` | chrome-devtools でチェックリストに沿ってブラウザ動作確認を実行 |
+| review | `/review <issue>` | Claude Code で観点別に並列コードレビューを実施し統合 |
+| codex-review | `/codex-review` | Codex CLI にコードレビューを依頼（PR またはメインブランチとの差分） |
+
+### ツール系
+
+| スキル | コマンド | 説明 |
+|-------|---------|------|
+| browser | `/browser` | chrome-devtools-mcp の CLI を使ったブラウザ操作（既存接続 or テスト起動を毎回確認） |
+| cloud-logging | `/cloud-logging <自然言語クエリ>` | gcloud CLI 経由で Cloud Logging のログを取得・分析 |
+| notify-discord | `/notify-discord <メッセージ>` | Discord Webhook でメッセージを送信（初回は webhook URL を保存） |
+| nanobanana | `/nanobanana <プロンプト> [--model flash\|pro] [--aspect 16:9] [--size 1K]` | Gemini の画像生成モデル (nanobanana) で画像生成し `tmp/images/` に保存。`GEMINI_API_KEY` 必須 |
+
+### Firebase 統合
+
+| スキル | 説明 |
+|-------|------|
+| firebase-auth-internal-app | Firebase Auth を社内向けアプリに統合（Blocking Functions によるドメイン制限、Firestore へのユーザー登録を含む） |
 
 ## 出力
 
-各スキルの成果物は `tmp/issues/<issue>/` に出力されます。
+各 Issue 駆動スキルの成果物は `tmp/issues/<issue番号>/` 配下に出力されます。
 
+- `research.md` - 調査結果
 - `plan.md` - 実装計画
-- `report.md` - 実装レポート（変更概要・懸念点・要レビュー箇所）
-- `checklist.md` - 受け入れテストチェックリスト
+- `checklist.md` - 動作確認チェックリスト
 - `pr.md` - PR タイトル・説明文
+- `review.md` - コードレビュー結果
+- `report.md` - 実装レポート
+
+## `/dev` の挙動
+
+`/dev` は mode で質問頻度を制御します。
+
+| mode | 挙動 |
+| --- | --- |
+| `auto` | 一切質問せず推奨案で最後まで進める |
+| `normal` | plan の方針選択と config 追記の承認のみ質問 |
+| `careful` | 各ステップ前と重要な判断ポイントで確認 |
+
+- `/review-plan` で**修正必須**が出た場合は `/plan` → `/review-plan` のサブループを最大 3 回まで回します
+- `/test` でチェックリスト失敗時は `/plan` から再計画するループを最大 3 回まで回します
+- 再計画で見落としが判明した間接依存・暗黙の必須セットは、`plan` / `review-plan` の `config.json` の `attentions` に追記され、以降の手戻り防御に転用されます
 
 ## インストール
 

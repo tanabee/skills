@@ -103,6 +103,34 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成ま
 - `auto` / `normal` / `careful` のいずれでも、選択されたスキップ設定は必ず適用される
 - スキップが 0 個 = 従来どおり全 9 ステップを実行
 
+## 作業ブランチの準備
+
+mode / レビューポイント / スキップステップの選択が完了したら、**TaskCreate より前に** 作業ブランチを準備する。実装コミットが `main` や無関係なブランチに混ざるのを防ぐためのガード。
+
+### 手順
+
+1. `git rev-parse --abbrev-ref HEAD` で現在のブランチ名を取得する
+2. 期待するブランチ名は **`issue-<issue番号>`**（例: issue 123 なら `issue-123`）
+3. 現在のブランチ名との比較で分岐:
+   - **一致する場合**: そのまま進む
+   - **一致しない場合**:
+     - `git rev-parse --verify issue-<issue番号>` でブランチの存在を確認
+     - **存在する**: `git checkout issue-<issue番号>` で切り替える
+     - **存在しない**: 以下を順に実行してブランチを作成する
+       1. `git status --porcelain` で未コミットの変更がないか確認。**変更がある場合は中断してユーザーに対処を促す**（自動 stash / commit / discard はしない）
+       2. `git fetch origin main` で main の最新を取得
+       3. `git checkout -b issue-<issue番号> origin/main` で main から新規ブランチを切る（ローカル main を経由しない）
+
+### mode との関係
+
+- `auto` / `normal` / `careful` いずれでも上記手順は必ず実行する
+- `careful` の場合のみ、ブランチ作成・切り替え前にユーザーに確認を取る
+
+### 注意事項
+
+- 既存のブランチ名規約が `issue-<issue番号>` と異なる場合は、本スキルの動作を変える前にユーザーに相談する（プロジェクト固有の命名規則は将来的に `config.json` 化を検討）
+- 未コミットの変更がある状態で勝手に `stash` / `reset` / `checkout` しない（破壊的操作の回避）
+
 ## タスク管理（Task ツール）
 
 `/dev` の進行状況は Claude Code の **Task ツール（TaskCreate / TaskUpdate / TaskList）** で管理する。ユーザーに進捗が可視化されると同時に、再開時の状態把握にも使う。

@@ -19,10 +19,10 @@ chrome-devtools を使って動作確認テストを実行する。`$ARGUMENTS` 
 
 ### 2. チェックリストの確認
 
-`tmp/issues/<issue番号>/checklist.md` の存在を確認する。
+`tmp/issues/<issue番号>/checklist.html` の存在を確認する。
 
 - **存在する場合**: チェックリストの全項目を読み込み、テスト対象とする
-- **存在しない場合**: AskUserQuestion でユーザーにどのようなテストを行うか質問し、回答をもとにチェックリストを `tmp/issues/<issue番号>/checklist.md` に作成する
+- **存在しない場合**: AskUserQuestion でユーザーにどのようなテストを行うか質問し、回答をもとにチェックリストを `tmp/issues/<issue番号>/checklist.html` に **HTML** で作成する（フォーマットは `/create-checklist` の出力構造に準拠）
 
 ### 3. テストの実行
 
@@ -32,8 +32,8 @@ chrome-devtools を使って動作確認テストを実行する。`$ARGUMENTS` 
 2. 各項目について以下を行う:
    - `/chrome-devtools-cli` でブラウザ操作を行い、期待する動作を確認する
    - 操作の要所でこまめにスクリーンショットを撮影し、`tmp/issues/<issue番号>/screenshots/` 配下に保存する（ファイル名例: `01_ログイン画面.png`, `02_ボタンクリック後.png` など、連番と内容がわかる名前をつける）
-   - 確認が取れた項目は `checklist.md` 内のチェックボックスを `- [x]` に更新する
-   - 確認に失敗した項目はチェックを入れず、失敗内容をコメントとして項目の下に追記する（例: `  - NG: ボタンクリック後にエラーが表示された`）
+   - 確認が取れた項目は `checklist.html` 内の対応する `<input type="checkbox">` に `checked` 属性を付与する（例: `<input type="checkbox" checked>`）
+   - 確認に失敗した項目はチェックを入れず、失敗内容を項目要素直下に HTML で追記する（例: `<p class="ng">NG: ボタンクリック後にエラーが表示された</p>`）
 3. 全項目の確認が完了したら、結果サマリーをユーザーに報告する
 
 ### 4. ハマりポイントの記録

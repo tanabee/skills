@@ -11,13 +11,13 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | dev | `/dev <issue> [auto\|normal\|careful]` | research → plan → review-plan → implement → create-checklist → create-pr-text → test → review → notify-discord を一気通貫で実行 |
 | research | `/research <issue>` | 受け入れ条件・影響範囲・実装方法の候補を整理する（選択は plan に委ねる） |
 | plan | `/plan <issue>` | research の結果をもとに実装方法を選択し、TDD ベースの実装計画を作成 |
-| review-plan | `/review-plan <issue>` | plan.md の影響範囲を独立視点で検証し、修正必須/任意改善として差し戻す |
+| review-plan | `/review-plan <issue>` | plan.html の影響範囲を独立視点で検証し、修正必須/任意改善として差し戻す |
 | implement | `/implement <issue>` | plan に基づいてコードを実装 |
 | create-checklist | `/create-checklist <issue>` | 正常系・異常系・エッジケースを網羅した動作確認チェックリストを生成 |
 | create-pr-text | `/create-pr-text <issue>` | Issue と計画から PR タイトル・説明文を作成（PR 自体は作成しない） |
 | test | `/test <issue>` | chrome-devtools でチェックリストに沿ってブラウザ動作確認を実行 |
-| review | `/review <issue>` | Claude Code で観点別に並列コードレビューを実施し統合 |
-| codex-review | `/codex-review` | Codex CLI にコードレビューを依頼（PR またはメインブランチとの差分） |
+| review | `/review <issue>` | Claude Code と Codex CLI を並列実行してコードレビュー（全観点を網羅）し、結果を統合 |
+| codex-review | `/codex-review` | Codex CLI にコードレビューを依頼（`/review` から内部呼び出しされる。単独実行も可） |
 
 ### ツール系
 
@@ -38,12 +38,15 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 
 各 Issue 駆動スキルの成果物は `tmp/issues/<issue番号>/` 配下に出力されます。
 
-- `research.md` - 調査結果
-- `plan.md` - 実装計画
-- `checklist.md` - 動作確認チェックリスト
-- `pr.md` - PR タイトル・説明文
-- `review.md` - コードレビュー結果
-- `report.md` - 実装レポート
+- `research.html` - 調査結果
+- `plan.html` - 実装計画
+- `review-plan.html` - 計画レビュー結果
+- `checklist.html` - 動作確認チェックリスト
+- `report.html` - 実装レポート
+- `pr.md` - PR タイトル・説明文（PR 本文用のため md のまま）
+- `review.html` - コードレビュー結果
+
+成果物は Markdown ではなく **HTML** で出力されます。AC カバレッジ表・TDD フェーズの色分け・Mermaid によるフローチャートやアーキテクチャ図など、Markdown では実現困難なリッチ表現で計画・調査・レビューの構造を立体的に伝えるためです。
 
 ## `/dev` の挙動
 
@@ -55,6 +58,8 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | `normal` | plan の方針選択と config 追記の承認のみ質問 |
 | `careful` | 各ステップ前と重要な判断ポイントで確認 |
 
+- **開始時に「どのステップ完了後に停止してユーザーがレビューするか」を選択できます**（mode に関わらず適用。`implement` 完了後だけ止めて確認、などが可能）
+- **開始時に「スキップするステップ」も選択できます**（例: PR を作らない場合は `create-pr-text` をスキップ、ローカル確認のみなら `notify-discord` をスキップ）
 - `/review-plan` で**修正必須**が出た場合は `/plan` → `/review-plan` のサブループを最大 3 回まで回します
 - `/test` でチェックリスト失敗時は `/plan` から再計画するループを最大 3 回まで回します
 - 再計画で見落としが判明した間接依存・暗黙の必須セットは、`plan` / `review-plan` の `config.json` の `attentions` に追記され、以降の手戻り防御に転用されます

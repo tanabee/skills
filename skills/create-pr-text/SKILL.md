@@ -9,7 +9,7 @@ GitHub issue から PR のタイトルと説明文を作成する。`$ARGUMENTS`
 **実際の PR は絶対に作成しない。** `gh pr create` は実行禁止。テキストの生成のみ行う。
 
 1. `tmp/config.json` の `pull_request_template_path` を確認する。なければプロジェクト内の PR テンプレート（`pull_request_template.md`, `.github/pull_request_template.md` 等）を探し、見つかったパスを `tmp/config.json` に保存する。テンプレートがあればそのフォーマットに従う
-2. `tmp/issues/<issue番号>/plan.md` や `tmp/issues/<issue番号>/checklist.md` が既にある場合はその内容を活用する
+2. `tmp/issues/<issue番号>/plan.html` や `tmp/issues/<issue番号>/checklist.html` が既にある場合はその内容を活用する
 3. `gh issue view` で issue を取得する
 4. `git log main..HEAD --stat` でコミット単位の変更概要を確認し、必要に応じて `git show <hash>` で個別のコミット内容を把握する
 5. 結果を Write ツールで `tmp/issues/<issue番号>/pr.md` に書き込む（フォーマットは [template.md](./assets/template.md) を参照）

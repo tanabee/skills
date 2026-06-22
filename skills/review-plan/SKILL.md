@@ -1,10 +1,10 @@
 ---
 name: review-plan
-description: 実装計画（plan.md）の影響範囲を独立した視点で検証し、見落としを修正必須 / 任意改善として差し戻す。
+description: 実装計画（plan.html）の影響範囲を独立した視点で検証し、見落としを修正必須 / 任意改善として差し戻す。
 allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Task
 ---
 
-`/plan` が作成した `tmp/issues/<issue番号>/plan.md` を独立視点でレビューし、**影響範囲の見積もり漏れ**を検出する。`$ARGUMENTS` は issue 番号（`123`、`#123`）または URL。
+`/plan` が作成した `tmp/issues/<issue番号>/plan.html` を独立視点でレビューし、**影響範囲の見積もり漏れ**を検出する。`$ARGUMENTS` は issue 番号（`123`、`#123`）または URL。
 
 ## 目的
 
@@ -16,19 +16,19 @@ allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Task
 
 このスキルのディレクトリにある `config.json` を読み込み、`attentions` 配列に記載されたプロジェクト固有の注意点を把握する。レビュー時にこれらの注意点が plan に反映されているか照合する。
 
-### 2. plan.md と research.md の読み込み
+### 2. plan.html と research.html の読み込み
 
-`tmp/issues/<issue番号>/plan.md` を読み込む。存在しない場合はユーザーにエラーを報告して終了。
-`tmp/issues/<issue番号>/research.md` も読み込む（受け入れ条件の照合に使う。無ければ plan.md の「受け入れ条件カバレッジ」セクションから AC を取得）。
+`tmp/issues/<issue番号>/plan.html` を読み込む。存在しない場合はユーザーにエラーを報告して終了。
+`tmp/issues/<issue番号>/research.html` も読み込む（受け入れ条件の照合に使う。無ければ plan.html の「受け入れ条件カバレッジ」セクションから AC を取得）。
 
-plan.md から以下を抽出する:
+plan.html から以下を抽出する:
 - **副作用 identifier セクション** に列挙された identifier
 - **受け入れ条件カバレッジ** の AC → タスクマッピング
 - **タスク詳細** の「対象ファイル」「変更内容」に挙げられたシンボル・ファイル
 
 ### 3. 受け入れ条件カバレッジの検証
 
-`research.md` の AC（または plan.md のカバレッジ表）に対して、以下を確認:
+`research.html` の AC（または plan.html のカバレッジ表）に対して、以下を確認:
 
 - 全 AC が plan のタスクでカバーされているか
 - 「対応タスク」欄が空の AC が無いか
@@ -61,7 +61,21 @@ plan が変更対象として挙げた関数・型・コンポーネントにつ
 
 ### 5. 検証結果の出力
 
-`tmp/issues/<issue番号>/review-plan.md` に Write で書き出す。フォーマットは [template.md](./assets/template.md) を参照。
+`tmp/issues/<issue番号>/review-plan.html` に Write で **HTML** として書き出す。
+
+**Markdown ではなく HTML で出力する理由**: レビュー結果は修正必須 / 任意改善 / OK の分類、AC カバレッジ表、検証根拠の grep 結果、波及先のリストなど、視覚的な分類と強調が効果を発揮する情報を含む。HTML を採用することで CSS による分類の色分け（赤=必須 / 黄=任意 / 緑=OK）、テーブル整形、Mermaid での波及関係の可視化、`<details>` での検証根拠の折りたたみなど、Markdown では実現困難なリッチ表現を活用できる。
+
+### 出力構造（必須セクション）
+
+レイアウトや図表は内容に応じて自由に設計してよい（テンプレートは置かない）。ただし `/dev` や `/plan` がレビュー結果を判定できるよう、以下のセクションは見出し（`<h2>` 等）として含めること。
+
+- **サマリ**: 修正必須 / 任意改善 / OK の件数、判定（差し戻し必要 / OK）
+- **受け入れ条件カバレッジ**: AC ごとのカバー状況（テーブル推奨）
+- **修正必須 (must)**: 各指摘について該当箇所・検証根拠・提案
+- **任意改善 (should)**: 各改善案について該当箇所・提案
+- **OK**: 検証して問題なかった項目
+
+波及関係や影響範囲を図で示すと理解が早い場合は、Mermaid で依存グラフを追加してよい。
 
 各指摘は以下のいずれかに分類:
 

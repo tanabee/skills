@@ -14,12 +14,13 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
 
 ### 1. Codex CLI へレビューを依頼
 
-以下の `codex exec` コマンドを `Bash` ツールで実行する。`<ARGS>` は `$ARGUMENTS` をそのまま展開する（空なら空文字列のまま）。
+レビュー依頼は **同梱の sh ラッパー** `scripts/run-codex.sh` 経由で起動する。プロンプトを `Bash` 引数に直接渡すとシェルメタ文字でクォートが壊れて起動失敗するケースがあるため、**プロンプトを必ずファイルに書き出してそのパスを渡す**。ラッパー側で `--dangerously-bypass-approvals-and-sandbox` と `</dev/null` を付けて、承認プロンプトや stdin 待ちで止まらないようにする。
 
-`--dangerously-bypass-approvals-and-sandbox` を必ず付与する。`review` skill から並列で呼び出された場合、対話的な承認プロンプトが出ると Codex CLI が止まり、レビューが失敗するため、強制実行フラグで承認・サンドボックスをスキップする:
+#### 1-1. プロンプトをファイルに書き出す
 
-```bash
-codex exec --dangerously-bypass-approvals-and-sandbox "$(cat <<'EOF'
+`Write` ツールで `tmp/codex-prompt-<タイムスタンプ>.txt` などの一時ファイルに以下の本文を書き出す。`<ARGS>` は `$ARGUMENTS` をそのまま展開する（空なら空文字列のまま）:
+
+```
 以下の手順でコードレビューを実施してください。
 
 ## 手順
@@ -63,11 +64,18 @@ codex exec --dangerously-bypass-approvals-and-sandbox "$(cat <<'EOF'
 
 ## 引数
 <ARGS>
-EOF
-)"
 ```
 
-- `codex exec` は非対話モードで動作する。`--dangerously-bypass-approvals-and-sandbox` を必ず付与して承認プロンプトとサンドボックスをスキップする（並列実行時に止まるのを防ぐ）
+#### 1-2. sh ラッパーで `codex exec` を起動
+
+`Bash` ツールで以下を実行する（`<prompt-file>` は 1-1 で書き出したファイルの絶対パス、`<skill-dir>` はこの skill のディレクトリの絶対パス）:
+
+```bash
+<skill-dir>/scripts/run-codex.sh <prompt-file>
+```
+
+- ラッパーは内部で `codex exec --dangerously-bypass-approvals-and-sandbox <prompt> </dev/null` を実行する
+- プロンプトファイルは実行終了時にラッパーが自動削除する（呼び出し側で `rm` 不要）
 - 起動はフォアグラウンド実行で構わない（Codex CLI の完了を待つだけ）
 
 ### 2. 完了検証

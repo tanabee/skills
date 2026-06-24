@@ -14,10 +14,12 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
 
 ### 1. Codex CLI へレビューを依頼
 
-以下の `codex exec` コマンドを `Bash` ツールで実行する。`<ARGS>` は `$ARGUMENTS` をそのまま展開する（空なら空文字列のまま）:
+以下の `codex exec` コマンドを `Bash` ツールで実行する。`<ARGS>` は `$ARGUMENTS` をそのまま展開する（空なら空文字列のまま）。
+
+`--dangerously-bypass-approvals-and-sandbox` を必ず付与する。`review` skill から並列で呼び出された場合、対話的な承認プロンプトが出ると Codex CLI が止まり、レビューが失敗するため、強制実行フラグで承認・サンドボックスをスキップする:
 
 ```bash
-codex exec "$(cat <<'EOF'
+codex exec --dangerously-bypass-approvals-and-sandbox "$(cat <<'EOF'
 以下の手順でコードレビューを実施してください。
 
 ## 手順
@@ -65,7 +67,7 @@ EOF
 )"
 ```
 
-- `codex exec` は非対話モードで動作する。対話的に止まる場合は `--yolo` 等の自動承認フラグを追加する
+- `codex exec` は非対話モードで動作する。`--dangerously-bypass-approvals-and-sandbox` を必ず付与して承認プロンプトとサンドボックスをスキップする（並列実行時に止まるのを防ぐ）
 - 起動はフォアグラウンド実行で構わない（Codex CLI の完了を待つだけ）
 
 ### 2. 完了検証

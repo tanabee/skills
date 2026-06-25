@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>コードレビュー</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.6; color: #1f2328; }
+  h1 { border-bottom: 2px solid #d0d7de; padding-bottom: 0.4rem; }
+  h2 { margin-top: 1.8rem; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3rem; }
+  h3 { margin-top: 1.2rem; }
+  code { background: #f6f8fa; padding: 0.1rem 0.35rem; border-radius: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  pre { background: #f6f8fa; padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto; }
+  pre code { background: transparent; padding: 0; }
+  blockquote { border-left: 4px solid #0969da; background: #f6f8fa; padding: 0.6rem 1rem; margin: 0.8rem 0; color: #57606a; }
+  ul { padding-left: 1.4rem; }
+  .badge { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 999px; margin-right: 0.3rem; vertical-align: middle; }
+  .sev-must { background: #ffe5e5; color: #b42318; border: 1px solid #fda4a4; }
+  .sev-should { background: #fff4d6; color: #7a5d00; border: 1px solid #f5d272; }
+  .sev-nit { background: #eef0f3; color: #57606a; border: 1px solid #d0d7de; }
+  .tag { display: inline-block; font-size: 0.72rem; padding: 0.05rem 0.45rem; border-radius: 4px; background: #ddf4ff; color: #0969da; border: 1px solid #b6e3ff; margin-right: 0.25rem; }
+  .finding { margin-bottom: 1.2rem; }
+  .finding .loc { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>コードレビュー</h1>
+
+<blockquote>
+  PR: #45 <a href="https://github.com/owner/repo/pull/45">https://github.com/owner/repo/pull/45</a><br>
+  関連 Issue: #123
+</blockquote>
+
+<h2>概要</h2>
+<p>ユーザー登録時のメールバリデーションを追加する PR。<code>src/validators/user.ts</code> にバリデーション関数を新設し、コントローラーから呼び出す構成。</p>
+
+<h2>良い点</h2>
+<ul>
+  <li>バリデーションロジックがコントローラーから分離されており、テスタビリティが高い</li>
+  <li>エラーメッセージが具体的でユーザーフレンドリー</li>
+</ul>
+
+<h2>指摘事項</h2>
+
+<h3><span class="badge sev-must">must</span> 重大な問題</h3>
+
+<div class="finding">
+  <div><span class="tag">正確性</span><span class="loc">src/validators/user.ts:15</span></div>
+  <p><code>validateEmail()</code> が <code>null</code> を受け取った場合に <code>TypeError</code> がスローされる。引数の null チェックを追加すべき。</p>
+<pre><code>function validateEmail(email: string | null): boolean {
+  if (!email) return false;
+  // ...
+}</code></pre>
+</div>
+
+<h3><span class="badge sev-should">should</span> 改善推奨</h3>
+
+<div class="finding">
+  <div><span class="tag">設計</span><span class="loc">src/controllers/user.ts:42-48</span></div>
+  <p><code>try-catch</code> ブロックで <code>ValidationError</code> 以外の例外もキャッチしている。予期しないエラーが握りつぶされる可能性がある。</p>
+<pre><code>catch (error) {
+  if (error instanceof ValidationError) {
+    return res.status(400).json({ message: error.message });
+  }
+  throw error;
+}</code></pre>
+</div>
+
+<div class="finding">
+  <div><span class="tag">テスト</span><span class="loc">tests/validators/user.test.ts</span></div>
+  <p>国際化ドメイン（例: <code>user@例え.jp</code>）のテストケースがない。要件として不要であれば、その旨をコメントに残すと良い。</p>
+</div>
+
+<h3><span class="badge sev-nit">nit</span> 軽微</h3>
+
+<div class="finding">
+  <div><span class="tag">可読性</span><span class="loc">src/validators/user.ts:3</span></div>
+  <p><code>EMAIL_REGEX</code> は <code>src/constants/</code> に定義済みの正規表現と重複している。既存の定数を再利用できる。</p>
+</div>
+
+<h2>まとめ</h2>
+<p>全体として設計は良好。<code>null</code> ハンドリングの修正（must）を対応すればマージ可能と判断します。</p>
+
+</body>
+</html>

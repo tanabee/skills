@@ -41,7 +41,7 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
   - `pr.md` — PR テキスト。PR の説明と実際の差分に乖離がないか確認
 
 ### 3. レビュー実施
-変更ファイルごとにコードベースの該当箇所を読み、以下の観点でレビューする。出力フォーマットは `skills/codex-review/assets/template.md` を参照:
+変更ファイルごとにコードベースの該当箇所を読み、以下の観点でレビューする。出力フォーマットは `skills/codex-review/assets/template.html` を参照（**HTML で出力する**）:
 
 - **正確性**: ロジックにバグや抜け漏れがないか
 - **設計**: 責務分離、命名、既存パターンとの一貫性
@@ -52,9 +52,10 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
 - **可読性**: 複雑すぎるロジック、不明瞭な命名、過剰な抽象化がないか
 
 ### 4. 結果の保存
-- PR モード: `tmp/prs/<PR 番号>/review-codex.md`
-- ローカルモード: `tmp/issues/<issue 番号>/review-codex.md`
+- PR モード: `tmp/prs/<PR 番号>/review-codex.html`
+- ローカルモード: `tmp/issues/<issue 番号>/review-codex.html`
 - `mkdir -p` で出力先ディレクトリを作成してから書き込む
+- 出力は `skills/codex-review/assets/template.html` のスタイルに準拠した完結した HTML ドキュメント（`<!DOCTYPE html>` から `</html>` まで）とする。重要度バッジ（must/should/nit）と観点タグの CSS クラスはテンプレートのものをそのまま利用する
 
 ## 注意事項
 - 軽微なスタイルの指摘（空白、改行など）はリンターに任せ、レビューでは扱わない
@@ -82,11 +83,11 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
 
 Codex CLI の実行完了後、`ls` で以下のいずれかが存在することを確認する:
 
-- PR モード: `tmp/prs/<PR 番号>/review-codex.md`
-- ローカルモード: `tmp/issues/<issue 番号>/review-codex.md`
+- PR モード: `tmp/prs/<PR 番号>/review-codex.html`
+- ローカルモード: `tmp/issues/<issue 番号>/review-codex.html`
 
 ファイルが生成されていない場合は `codex exec` を再実行する（最大 2 回まで）。
 
 ### 3. ユーザーへの提示
 
-生成された `review-codex.md` の内容を要約してユーザーに提示する。
+生成された `review-codex.html` の内容を要約してユーザーに提示する。

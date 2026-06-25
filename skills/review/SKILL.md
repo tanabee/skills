@@ -148,10 +148,10 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 
 #### 4-B. Codex レビュー（Skill ツールで `/codex-review` を起動）
 
-`Skill` ツールで `codex-review` を呼び出す。`args` には `$ARGUMENTS` をそのまま渡す（PR 番号 / URL / 空文字列）。Codex は内部で差分取得・情報収集・全観点レビューを行い、以下のいずれかに `review-codex.md` を出力する:
+`Skill` ツールで `codex-review` を呼び出す。`args` には `$ARGUMENTS` をそのまま渡す（PR 番号 / URL / 空文字列）。Codex は内部で差分取得・情報収集・全観点レビューを行い、以下のいずれかに `review-codex.html` を出力する:
 
-- PR モード: `tmp/prs/<PR 番号>/review-codex.md`
-- ローカルモード: `tmp/issues/<issue 番号>/review-codex.md`
+- PR モード: `tmp/prs/<PR 番号>/review-codex.html`
+- ローカルモード: `tmp/issues/<issue 番号>/review-codex.html`
 
 #### 並列発行の方法
 
@@ -159,7 +159,7 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 
 ### 5. 結果の統合
 
-Claude Code レビュー（`review-claude.html`）と Codex レビュー（`review-codex.md`）の両方を Read し、`<output-dir>/review.html` に **HTML** として統合する。
+Claude Code レビュー（`review-claude.html`）と Codex レビュー（`review-codex.html`）の両方を Read し、`<output-dir>/review.html` に **HTML** として統合する。
 
 統合時のルール:
 
@@ -180,7 +180,7 @@ Claude Code レビュー（`review-claude.html`）と Codex レビュー（`revi
 
 ### 6. ユーザーへの提示
 
-`review.html` のサマリ（各重要度の件数、両者一致の件数、ブロッカー概要、総合判断）をユーザーに提示する。詳細は `review-claude.html` と `review-codex.md` を参照するよう案内する。
+`review.html` のサマリ（各重要度の件数、両者一致の件数、ブロッカー概要、総合判断）をユーザーに提示する。詳細は `review-claude.html` と `review-codex.html` を参照するよう案内する。
 
 `<output-dir>/diff.patch` と `<output-dir>/context.html` は中間成果物として残す（後から再確認や再実行のため）。不要なら手動で削除する。
 

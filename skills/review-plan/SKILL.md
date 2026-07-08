@@ -1,10 +1,10 @@
 ---
 name: review-plan
-description: 実装計画(plan.html)とチェックリストの影響範囲・カバレッジを独立した視点で検証し、見落としを修正必須 / 任意改善として差し戻す。
+description: 実装計画(plan.md)とチェックリストの影響範囲・カバレッジを独立した視点で検証し、見落としを修正必須 / 任意改善として差し戻す。
 allowed-tools: Bash, Read, Glob, Grep, Write, Edit
 ---
 
-`/plan` が作成した `tmp/issues/<issue番号>/plan.html` と `checklist.html` を独立視点でレビューし、**影響範囲の見積もり漏れ**を検出する。`$ARGUMENTS` は issue 番号(`123`、`#123`)または URL。
+`/plan` が作成した `tmp/issues/<issue番号>/plan.md` と `checklist.html` を独立視点でレビューし、**影響範囲の見積もり漏れ**を検出する。`$ARGUMENTS` は issue 番号(`123`、`#123`)または URL。
 
 ## 目的
 
@@ -18,19 +18,19 @@ allowed-tools: Bash, Read, Glob, Grep, Write, Edit
 
 このスキルのディレクトリにある `config.json` を読み込み、`attentions` 配列に記載されたプロジェクト固有の注意点を把握する。レビュー時にこれらの注意点が plan に反映されているか照合する。
 
-### 2. plan.html / checklist.html / research.html の読み込み
+### 2. plan / checklist / research の読み込み
 
-`tmp/issues/<issue番号>/plan.html` と `checklist.html` を読み込む。plan.html が存在しない場合は呼び出し元にエラーを報告して終了。
-`tmp/issues/<issue番号>/research.html` も読み込む(受け入れ条件・未確認の仮定・盲点候補の照合に使う。無ければ plan.html の「受け入れ条件カバレッジ」セクションから AC を取得)。
+`tmp/issues/<issue番号>/plan.md` と `checklist.html` を読み込む(md が無ければ `plan.html`。以降も同様)。plan が存在しない場合は呼び出し元にエラーを報告して終了。
+`tmp/issues/<issue番号>/research.md` も読み込む(受け入れ条件・未確認の仮定・盲点候補の照合に使う。無ければ plan の「受け入れ条件カバレッジ」セクションから AC を取得)。
 
-plan.html から以下を抽出する:
+plan から以下を抽出する:
 - **副作用 identifier セクション** に列挙された identifier
 - **受け入れ条件カバレッジ** の AC → タスクマッピング
 - **タスク詳細** の「対象ファイル」「変更内容」に挙げられたシンボル・ファイル
 
 ### 3. 受け入れ条件カバレッジの検証
 
-`research.html` の AC(または plan.html のカバレッジ表)に対して、以下を確認:
+`research.md` の AC(または plan のカバレッジ表)に対して、以下を確認:
 
 - 全 AC が plan のタスクでカバーされているか
 - 「対応タスク」欄が空の AC が無いか
@@ -80,15 +80,15 @@ plan が変更対象として挙げた関数・型・コンポーネントにつ
 - 監視・ログ(障害時に気づける・追える状態か)
 - 性能(データ量が増えたときに破綻しないか)
 
-research.html の「盲点候補」「未確認の仮定」が plan で対処・言及されているかも照合する。該当する懸念が実際にコード上の根拠を持つ場合のみ指摘する(観点を機械的に全部挙げない)。
+research.md の「盲点候補」「未確認の仮定」が plan で対処・言及されているかも照合する。該当する懸念が実際にコード上の根拠を持つ場合のみ指摘する(観点を機械的に全部挙げない)。
 
-### 5. 検証結果の出力
+### 5. 検証結果の出力(2 種生成)
 
-`tmp/issues/<issue番号>/review-plan.html` に Write で **HTML** として書き出す(分類の色分け・テーブル・`<details>` での検証根拠の折りたたみなど、Markdown では困難な表現を使うため)。
+検証結果を `tmp/issues/<issue番号>/review-plan.md` に書き出す(**md が正**。`/dev` と `/plan` はこちらを読む)。続けて同じ内容を人間用に `review-plan.html` としてレンダリングする(must / should / OK の色分け・`<details>` での検証根拠の折りたたみなどはこちらに)。
 
 ### 出力構造(必須セクション)
 
-レイアウトや図表は内容に応じて自由に設計してよい(テンプレートは置かない)。ただし `/dev` や `/plan` がレビュー結果を判定できるよう、以下のセクションは見出し(`<h2>` 等)として含めること。
+レイアウトや図表は内容に応じて自由に設計してよい(テンプレートは置かない)。ただし `/dev` や `/plan` がレビュー結果を判定できるよう、以下のセクションは md の見出し(`##`)として含めること(html も同構成にする)。
 
 - **サマリ**: 修正必須 / 任意改善 / OK の件数、判定(差し戻し必要 / OK)
 - **受け入れ条件カバレッジ**: AC ごとのカバー状況 — plan タスクと checklist 項目の両方(テーブル推奨)
@@ -110,7 +110,7 @@ research.html の「盲点候補」「未確認の仮定」が plan で対処・
 - **修正必須が 1 件以上**: 「`/plan` への差し戻しが必要」と判定
 - **修正必須 0 件**: レビュー OK として完了
 
-サブエージェントとして実行されている場合は、**最終メッセージとして**次を返す: 判定(OK / 差し戻し)、must / should / OK の件数、must の要旨(1 行ずつ)。詳細は review-plan.html を参照するよう添える。
+サブエージェントとして実行されている場合は、**最終メッセージとして**次を返す: 判定(OK / 差し戻し)、must / should / OK の件数、must の要旨(1 行ずつ)。詳細は review-plan.md / review-plan.html を参照するよう添える。
 
 ## 注意事項
 

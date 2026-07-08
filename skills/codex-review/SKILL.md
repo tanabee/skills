@@ -38,8 +38,8 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
 - PR モードの場合、PR の情報（タイトル、説明、関連 issue）を把握する
 - 関連する issue がある場合は `gh issue view` で issue の目的・要件を把握する
 - ローカルモードの場合、`tmp/issues/<issue番号>/` 配下の既存成果物を確認する:
-  - `plan.html` — 実装計画。意図した設計や変更方針との整合性を確認
-  - `report.html` — 実装レポート。実装者が認識している懸念点や追加変更を把握
+  - `plan.md` — 実装計画。意図した設計や変更方針との整合性を確認(md が無ければ `plan.html`。以降も同様)
+  - `report.md` — 実装レポート。実装者が認識している懸念点や追加変更を把握
   - `implementation-notes.md` — 実装ノート。計画からの逸脱(Deviations)と実装中の判断を把握
   - `checklist.html` — 受け入れテストチェックリスト。テストの網羅性を検証する基準
   - `pr.md` — PR テキスト。PR の説明と実際の差分に乖離がないか確認

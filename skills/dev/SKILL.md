@@ -20,17 +20,18 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 | # | ステップ | 実行形態 | 呼び出し | 主な成果物 | 前提成果物 | 並列 |
 |---|---|---|---|---|---|---|
-| 1 | research | inline | Skill `/research <issue> <mode>` | research.html | — | — |
-| 2 | plan | inline | Skill `/plan <issue> <mode>` | plan.html, checklist.html | research.html | — |
-| 3 | review-plan | subagent | Agent → `/review-plan <issue>` | review-plan.html | plan.html, checklist.html | — |
-| 4 | implement | inline | Skill `/implement <issue> <mode>` | コード, implementation-notes.md, report.html | plan.html | — |
-| 5 | create-pr-text | subagent | Agent → `/create-pr-text <issue>` | pr.md | plan.html, report.html | A |
+| 1 | research | inline | Skill `/research <issue> <mode>` | research.md/.html | — | — |
+| 2 | plan | inline | Skill `/plan <issue> <mode>` | plan.md/.html, checklist.html | research.md | — |
+| 3 | review-plan | subagent | Agent → `/review-plan <issue>` | review-plan.md/.html | plan.md, checklist.html | — |
+| 4 | implement | inline | Skill `/implement <issue> <mode>` | コード, implementation-notes.md, report.md/.html | plan.md | — |
+| 5 | create-pr-text | subagent | Agent → `/create-pr-text <issue>` | pr.md | plan.md, report.md | A |
 | 6 | test | inline | Skill `/test <issue> <mode>` | checklist.html 更新, screenshots/ | checklist.html, implementation-notes.md | A |
-| 7 | review | inline | Skill `/review <issue>` | review.html | 実装済みコード | — |
-| 8 | quiz | subagent | Agent → `/quiz <issue>` | quiz.html | report.html, review.html | B |
+| 7 | review | inline | Skill `/review <issue>` | review.md/.html | 実装済みコード | — |
+| 8 | quiz | subagent | Agent → `/quiz <issue>` | quiz.html | report.md, review.md | B |
 | 9 | notify-discord | inline | Skill `/notify-discord <サマリ>` | — | — | B |
 
 - 成果物はすべて `tmp/issues/<issue番号>/` 配下
+- **成果物の 2 種生成(md/.html)**: research / plan / report / review-plan / review は **md(正・スキル間の伝達用)と html(人間レビュー用ビュー)** の 2 種で生成される。スキルは md を読み、無ければ html にフォールバックする。checklist.html は `/test` が結果を書き込む状態ファイルのため html 単一
 - **実行形態**
   - `inline`: Skill ツールで本会話内で実行する。ユーザーとの対話・コード変更・ブラウザ操作を伴うステップ
   - `subagent`: Agent ツール(`general-purpose`)で別コンテキストとして実行する。対話が不要で「成果物を書いて要約を返す」ステップ。メイン会話のコンテキスト消費を抑え、review-plan では **plan 作成の文脈を持たない独立視点** も担保する
@@ -144,9 +145,9 @@ dev が実施内容のサマリを組み立てて `/notify-discord <サマリ>` 
 
 ## 完了の定義(DoD)ゲート
 
-review ループを抜けたら、グループ B に進む前に plan.html の「完了の定義(Definition of Done)」を読み、各項目の充足を検証する。
+review ループを抜けたら、グループ B に進む前に plan.md の「完了の定義(Definition of Done)」を読み、各項目の充足を検証する。
 
-- 各項目を**証跡に基づいて**判定する(例: checklist.html の全項目が checked / review.html の must が 0 / lint・type check が pass / 必要なドキュメント更新済み)
+- 各項目を**証跡に基づいて**判定する(例: checklist.html の全項目が checked / review.md の must が 0 / lint・type check が pass / 必要なドキュメント更新済み)
 - 判定結果を dev-state.json に記録する
 - **未充足項目がある場合**: 対応するループ(test / review)または implement に戻る。該当ループが上限到達済みならユーザーに報告して判断を仰ぐ
 - 全項目充足でグループ B へ進む

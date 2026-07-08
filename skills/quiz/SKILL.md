@@ -22,7 +22,7 @@ allowed-tools: Bash, Read, Glob, Grep, Write, AskUserQuestion
 ### 2. 材料の収集
 
 - **diff**: PR モードは `gh pr diff`、ローカルモードは `git diff <base>...HEAD`(`<base>` は `tmp/config.json` の `base_branch`。無ければ `git remote show origin` の HEAD branch を検出して保存)
-- **成果物**(保存先ディレクトリにあるものだけ使う): `plan.html`(仕様・DoD)/ `report.html`(実装解説)/ `implementation-notes.md`(計画からの逸脱)/ `review.html`(レビュー指摘)/ `checklist.html`(テスト結果)/ `screenshots/`(デモ素材)
+- **成果物**(保存先ディレクトリにあるものだけ使う): `plan.md`(仕様・DoD)/ `report.md`(実装解説)/ `implementation-notes.md`(計画からの逸脱)/ `review.md`(レビュー指摘)— いずれも md が無ければ html を読む / `checklist.html`(テスト結果)/ `screenshots/`(デモ素材)
 - diff に現れた変更ファイルは、必要に応じてコードベースの該当箇所を読んで文脈を把握する
 
 ### 3. quiz.html の生成

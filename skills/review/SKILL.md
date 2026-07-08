@@ -1,6 +1,6 @@
 ---
 name: review
-description: Claude Code と Codex CLI による並列コードレビュー。親で差分・コンテキストを 1 回だけ収集し、Claude Code（全観点を一括レビュー）と Codex（`/codex-review` 経由）を並列実行、結果を統合した review.html を生成する。
+description: Claude Code と Codex CLI による並列コードレビュー。親で差分・コンテキストを 1 回だけ収集し、Claude Code（全観点を一括レビュー）と Codex（`/codex-review` 経由）を並列実行、結果を統合した review.md / review.html を生成する。
 allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 ---
 
@@ -41,7 +41,7 @@ Claude Code・Codex 双方とも、以下の観点を網羅的に見る。複数
 3. `collect-context` — `context.html` の書き出し
 4. `review-claude` — Claude Code レビュー（Agent 呼び出し）
 5. `review-codex` — Codex レビュー（`/codex-review` 呼び出し）
-6. `integrate-review` — `review.html` への統合
+6. `integrate-review` — `review.md` / `review.html` への統合
 
 ### 進行管理ルール
 
@@ -81,11 +81,11 @@ PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.
 1. **PR モードの場合**: `gh pr view` の結果から PR タイトル・説明・作成者・関連 issue を取得
 2. 関連 issue があれば `gh issue view` で issue の目的・要件を取得
 3. **ローカルモードの場合**: `tmp/issues/<issue 番号>/` 配下の既存成果物があれば要点を抽出
-   - `plan.html` — 実装計画。意図した設計や変更方針
-   - `report.html` — 実装レポート。実装者が認識している懸念点や追加変更
+   - `plan.md` — 実装計画。意図した設計や変更方針(md が無ければ `plan.html`。以降も同様)
+   - `report.md` — 実装レポート。実装者が認識している懸念点や追加変更
    - `implementation-notes.md` — 実装ノート。計画からの逸脱(Deviations)と実装中の判断
    - `checklist.html` — 受け入れテストチェックリスト
-   - `pr.md` — PR テキスト（`/create-pr-text` は md のまま）
+   - `pr.md` — PR テキスト
 
 `context.html` のフォーマットは [assets/context-template.html](./assets/context-template.html) を参照。該当しないセクション（例: ローカルモード時の PR 情報、PR モード時のローカル成果物）は省略してよい。
 
@@ -152,7 +152,7 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 
 ### 5. 結果の統合
 
-Claude Code レビュー（`review-claude.html`）と Codex レビュー（`review-codex.html`）の両方を Read し、`<output-dir>/review.html` に **HTML** として統合する。
+Claude Code レビュー（`review-claude.html`）と Codex レビュー（`review-codex.html`）の両方を Read し、統合結果を `<output-dir>/review.md` に書き出す(**md が正**。`/quiz` や `/dev` はこちらを読む)。続けて同じ内容を人間用に `<output-dir>/review.html` としてレンダリングする。
 
 統合時のルール:
 
@@ -163,7 +163,7 @@ Claude Code レビュー（`review-claude.html`）と Codex レビュー（`revi
 
 HTML を採用する理由: 重要度の色分け（must=赤 / should=黄 / nit=灰）・レビュアー別バッジ・両者一致指摘の強調・`<details>` 折りたたみなど、Markdown では困難な表現を使うため。
 
-統合後の `review.html` は以下のセクションを `<h2>` 等の見出しで含める（テンプレートは置かない）:
+統合後の review.md / review.html は以下のセクションを md の見出し(`##`)として含める（html も同構成。テンプレートは置かない）:
 
 - **概要**
 - **サマリ**（must / should / nit の件数、両者一致の件数、Claude のみ / Codex のみの件数）

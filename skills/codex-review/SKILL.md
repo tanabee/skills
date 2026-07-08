@@ -1,7 +1,7 @@
 ---
 name: codex-review
 description: Codex CLI にコードレビューを依頼する。PR が存在する場合は PR を、ローカルブランチの場合はメインブランチとの差分をレビューする。
-allowed-tools: Bash, BashOutput, Read, AskUserQuestion
+allowed-tools: Bash, BashOutput, Read, Write, AskUserQuestion
 ---
 
 Codex CLI にコードレビューを依頼する。Claude Code は `codex exec` で自己完結したレビュープロンプトを渡すだけで、レビュー本体は Codex CLI 側で実施される。
@@ -18,7 +18,10 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
 
 #### 1-1. プロンプトをファイルに書き出す
 
-`Write` ツールで `tmp/codex-prompt-<タイムスタンプ>.txt` などの一時ファイルに以下の本文を書き出す。`<ARGS>` は `$ARGUMENTS` をそのまま展開する（空なら空文字列のまま）:
+`Write` ツールで `tmp/codex-prompt-<タイムスタンプ>.txt` などの一時ファイルに以下の本文を書き出す。プレースホルダは書き出し時に展開する:
+
+- `<ARGS>`: `$ARGUMENTS` をそのまま展開する（空なら空文字列のまま）
+- `<BASE>`: `tmp/config.json` の `base_branch`。無ければ `git remote show origin` の HEAD branch を検出して `tmp/config.json` に保存し、その値を使う
 
 ```
 以下の手順でコードレビューを実施してください。
@@ -29,7 +32,7 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
 - PR 番号/URL が指定された場合: `gh pr view` で PR 情報を取得し、`gh pr diff` で差分を取得（PR モード）
 - PR 番号/URL が空の場合: `gh pr view` を試み、現在のブランチに PR が存在するか確認する
   - PR が存在する → PR モードで差分を取得
-  - PR が存在しない → `git diff main...HEAD` でメインブランチとの差分を取得（ローカルモード）
+  - PR が存在しない → `git diff <BASE>...HEAD` でベースブランチとの差分を取得（ローカルモード）
 
 ### 2. 情報収集
 - PR モードの場合、PR の情報（タイトル、説明、関連 issue）を把握する
@@ -37,6 +40,7 @@ Codex CLI にコードレビューを依頼する。Claude Code は `codex exec`
 - ローカルモードの場合、`tmp/issues/<issue番号>/` 配下の既存成果物を確認する:
   - `plan.html` — 実装計画。意図した設計や変更方針との整合性を確認
   - `report.html` — 実装レポート。実装者が認識している懸念点や追加変更を把握
+  - `implementation-notes.md` — 実装ノート。計画からの逸脱(Deviations)と実装中の判断を把握
   - `checklist.html` — 受け入れテストチェックリスト。テストの網羅性を検証する基準
   - `pr.md` — PR テキスト。PR の説明と実際の差分に乖離がないか確認
 

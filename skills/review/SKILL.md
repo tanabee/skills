@@ -1,7 +1,7 @@
 ---
 name: review
 description: Claude Code と Codex CLI による並列コードレビュー。親で差分・コンテキストを 1 回だけ収集し、Claude Code（全観点を一括レビュー）と Codex（`/codex-review` 経由）を並列実行、結果を統合した review.html を生成する。
-allowed-tools: Bash, Read, Write, Glob, Grep, Task, Skill, AskUserQuestion
+allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 ---
 
 Claude Code と Codex CLI で並列にコードレビューを行い、結果を統合する。
@@ -70,7 +70,7 @@ Claude Code・Codex 双方とも、以下の観点を網羅的に見る。複数
 親の `Bash` ツールで 1 回だけ実行し、`<output-dir>/diff.patch` に保存する:
 
 - PR モード: `gh pr diff <PR 番号> > <output-dir>/diff.patch`
-- ローカルモード: `git diff main...HEAD > <output-dir>/diff.patch`
+- ローカルモード: `git diff <base>...HEAD > <output-dir>/diff.patch`(`<base>` は `tmp/config.json` の `base_branch`。無ければ `git remote show origin` の HEAD branch を検出して `tmp/config.json` に保存する)
 
 ### 3. コンテキストをファイルに書き出す（1 回だけ）
 
@@ -83,6 +83,7 @@ PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.
 3. **ローカルモードの場合**: `tmp/issues/<issue 番号>/` 配下の既存成果物があれば要点を抽出
    - `plan.html` — 実装計画。意図した設計や変更方針
    - `report.html` — 実装レポート。実装者が認識している懸念点や追加変更
+   - `implementation-notes.md` — 実装ノート。計画からの逸脱(Deviations)と実装中の判断
    - `checklist.html` — 受け入れテストチェックリスト
    - `pr.md` — PR テキスト（`/create-pr-text` は md のまま）
 
@@ -108,15 +109,7 @@ PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.
 
 ## レビュー観点（全てを網羅的に見る）
 
-| 観点 | 主な確認事項 |
-|---|---|
-| 正確性 | ロジックのバグ・抜け漏れ、エッジケース（null / 空配列 / 境界値 / 並行処理 / 非同期の競合）、エラーハンドリングの妥当性、条件分岐・ループの網羅性 |
-| 設計 | 責務分離、命名、既存パターンとの一貫性、抽象化レベル、モジュール境界・依存の向き |
-| 副作用 / 影響範囲 | 変更・削除・リネームしたシンボル（関数・型・定数・ファイルパス・設定キー・環境変数等）の参照元、シグネチャ変更による型エラー、削除した機能の呼び出し元、挙動変更による既存フローへの影響、public API / DB スキーマ / 設定ファイルの破壊的変更 |
-| セキュリティ | インジェクション（SQL / コマンド / XSS / SSRF / プロンプトインジェクション等）、認証・認可の不備（権限チェック漏れ、IDOR）、機密情報の漏洩、入力バリデーション、暗号・ハッシュの妥当性 |
-| パフォーマンス | N+1 クエリ、計算量、不要な再レンダリング（React の依存配列・memo 化）、不要なアロケーション、ブロッキング操作、キャッシュの有効活用 |
-| テスト | テストの網羅性、境界値・異常系のカバレッジ、アサーションの妥当性、過度なモック、テスト粒度、回帰テストの追加 |
-| 可読性 | 深いネスト、長すぎる関数、不明瞭な命名、過剰な抽象化、コメントの質、認知負荷の高い構造 |
+<review-perspectives>
 
 ## 手順
 
@@ -144,7 +137,7 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 - 良い点も積極的にコメントする
 ```
 
-パスは**絶対パス**で渡す（エージェントの CWD が親と一致する保証がないため）。
+パスは**絶対パス**で渡す（エージェントの CWD が親と一致する保証がないため）。`<review-perspectives>` には本 SKILL.md 冒頭の「レビュー観点」セクションの表を**そのまま転記して**展開する（観点表の定義は 1 箇所に保つため、プロンプト内には重複記載しない）。
 
 #### 4-B. Codex レビュー（Skill ツールで `/codex-review` を起動）
 
@@ -168,7 +161,7 @@ Claude Code レビュー（`review-claude.html`）と Codex レビュー（`revi
 - **指摘事項**: 重要度別（must / should / nit）にまとめる。各指摘に **レビュアータグ**（`claude` / `codex`）を付与。同じ指摘が両方から上がっている場合は統合し、レビュアータグを両方付ける（**両者が独立に指摘 = 確度が高い**として強調表示）。各指摘に観点タグも併記
 - **まとめ**: 総合判断（マージ可否、ブロッカーの有無）。Claude / Codex の指摘傾向の違い（観点の偏り、見落としの差）にも触れてよい
 
-**Markdown ではなく HTML で出力する理由**: レビュー結果は重要度バッジ、レビュアータグ、観点タグ、サマリの可視化など、構造化と視覚的強調が効果を発揮する情報を扱う。HTML を採用することで CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、レビュアー別バッジ、両者一致指摘の強調、`<details>` でのファイル別折りたたみなど、Markdown では実現困難なリッチ表現を活用できる。
+HTML を採用する理由: 重要度の色分け（must=赤 / should=黄 / nit=灰）・レビュアー別バッジ・両者一致指摘の強調・`<details>` 折りたたみなど、Markdown では困難な表現を使うため。
 
 統合後の `review.html` は以下のセクションを `<h2>` 等の見出しで含める（テンプレートは置かない）:
 

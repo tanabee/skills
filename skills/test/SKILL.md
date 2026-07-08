@@ -1,10 +1,17 @@
 ---
 name: test
 description: chrome-devtools を使って動作確認チェックリストに沿ったテストを実行する。「動作確認して」「テストして」「動作テストして」「ブラウザで確認して」「チェックリストを確認して」などの依頼で発火する。
-allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Task, Skill, AskUserQuestion
+allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Skill, AskUserQuestion
 ---
 
-chrome-devtools を使って動作確認テストを実行する。`$ARGUMENTS` は issue 番号（`123`、`#123`）または URL。`$ARGUMENTS` が空の場合はユーザーに issue 番号を質問する。
+chrome-devtools を使って動作確認テストを実行する。
+
+## 引数
+
+`$ARGUMENTS` は `<issue> [mode]` の形式で受け取る。
+
+- `<issue>`: issue 番号(`123`、`#123`)または URL。空の場合はユーザーに issue 番号を質問する
+- `[mode]`: `auto` / `normal`。`auto` の場合はユーザーに質問しない(fallback 時の挙動は手順 2 参照)。省略時は質問してよい
 
 ## 前提条件
 
@@ -22,32 +29,38 @@ chrome-devtools を使って動作確認テストを実行する。`$ARGUMENTS` 
 `tmp/issues/<issue番号>/checklist.html` の存在を確認する。
 
 - **存在する場合**: チェックリストの全項目を読み込み、テスト対象とする
-- **存在しない場合**: AskUserQuestion でユーザーにどのようなテストを行うか質問し、回答をもとにチェックリストを `tmp/issues/<issue番号>/checklist.html` に **HTML** で作成する（フォーマットは `/create-checklist` の出力構造に準拠）
+- **存在しない場合**(fallback): チェックリストをその場で作成する。フォーマットと構成は `/plan` が生成する checklist.html の出力構造(前提条件 / 正常系 / 異常系 / エッジケース / 補助項目、AC 番号併記、checkbox)に準拠する
+  - `normal`: AskUserQuestion でどのようなテストを行うか質問し、回答をもとに作成する
+  - `auto`: 質問せず、`research.html` の AC と `plan.html`(あれば)から自動構築し、その旨をチェックリスト冒頭に明記する
 
-### 3. テストの実行
+### 3. 実装との整合確認(Deviations の反映)
+
+`tmp/issues/<issue番号>/implementation-notes.md` が存在する場合、`## Deviations` を読み、**計画時に作られたチェックリストと実装の実態に乖離がないか**を確認する。逸脱によって操作手順・期待結果が変わった項目があれば、テスト実行前に checklist.html を更新する(変更した項目には理由を 1 行添える)。
+
+### 4. テストの実行
 
 チェックリストの各項目について、`/chrome-devtools-cli` スキルを使って動作確認を行う。
 
 1. チェックリストの項目を上から順に実行する
 2. 各項目について以下を行う:
    - `/chrome-devtools-cli` でブラウザ操作を行い、期待する動作を確認する
-   - 操作の要所でこまめにスクリーンショットを撮影し、`tmp/issues/<issue番号>/screenshots/` 配下に保存する（ファイル名例: `01_ログイン画面.png`, `02_ボタンクリック後.png` など、連番と内容がわかる名前をつける）
-   - 確認が取れた項目は `checklist.html` 内の対応する `<input type="checkbox">` に `checked` 属性を付与する（例: `<input type="checkbox" checked>`）
-   - 確認に失敗した項目はチェックを入れず、失敗内容を項目要素直下に HTML で追記する（例: `<p class="ng">NG: ボタンクリック後にエラーが表示された</p>`）
-3. 全項目の確認が完了したら、結果サマリーをユーザーに報告する
+   - 操作の要所でこまめにスクリーンショットを撮影し、`tmp/issues/<issue番号>/screenshots/` 配下に保存する(ファイル名例: `01_ログイン画面.png`, `02_ボタンクリック後.png` など、連番と内容がわかる名前をつける)
+   - 確認が取れた項目は `checklist.html` 内の対応する `<input type="checkbox">` に `checked` 属性を付与する(例: `<input type="checkbox" checked>`)
+   - 確認に失敗した項目はチェックを入れず、失敗内容を項目要素直下に HTML で追記する(例: `<p class="ng">NG: ボタンクリック後にエラーが表示された</p>`)
+3. 全項目の確認が完了したら、結果サマリーを報告する(呼び出し元が `/dev` の場合、失敗項目の有無が再計画ループの判定に使われる)
 
-### 4. ハマりポイントの記録
+### 5. ハマりポイントの記録
 
 テスト中に発生した問題や予期しない挙動があった場合、`config.json` に記録する。記録する内容:
 
 - `issue`: 発生した問題の概要
-- `cause`: 原因（判明している場合）
+- `cause`: 原因(判明している場合)
 - `workaround`: 回避策や対処法
 - `date`: 発生日
 
 ## 注意事項
 
 - テスト実行前に必ず `config.json` の既知の問題点を確認し、同じポイントでハマらないようにする
-- スクリーンショットを活用して視覚的な確認も行う
+- スクリーンショットを活用して視覚的な確認も行う(スクリーンショットは `/quiz` の解説パートでデモとしても再利用される)
 - テストが全て通った場合でも、`config.json` に有用な知見があれば追記する
-- 失敗した項目がある場合、原因の調査は行うがコードの修正は行わない。修正が必要な場合はユーザーに報告する
+- 失敗した項目がある場合、原因の調査は行うがコードの修正は行わない。修正が必要な場合は呼び出し元(ユーザーまたは `/dev`)に報告する

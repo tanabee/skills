@@ -1,227 +1,198 @@
 ---
 name: dev
-description: GitHub issue から計画・実装・チェックリスト・PR テキストまで一気通貫で行う。
-allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Task, Skill, AskUserQuestion
+description: GitHub issue から計画・実装・テスト・レビュー・PR テキスト・理解確認まで一気通貫で行う。
+allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Agent, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 disable-model-invocation: true
 ---
 
-GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成まで一気通貫で実行する。
+GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・理解確認まで一気通貫で実行する。
 
 ## 引数
 
 `$ARGUMENTS` は `<issue> [mode]` の形式で受け取る。
 
-- `<issue>`: issue 番号（`123`、`#123`）または URL。必須。空の場合はユーザーに issue 番号を質問する。URL が渡された場合は issue 番号を抽出し、以降のステップには正規化済みの issue 番号（例: `123`）を渡す。
-- `[mode]`: 慎重度合い。`auto` / `normal` / `careful` のいずれか。省略可。
+- `<issue>`: issue 番号(`123`、`#123`)または URL。必須。空の場合はユーザーに issue 番号を質問する。URL が渡された場合は issue 番号を抽出し、以降のステップには正規化済みの issue 番号(例: `123`)を渡す。
+- `[mode]`: 慎重度合い。`auto` / `normal` のいずれか。省略可(開始時セットアップで質問する)。
 
-## モード
+## ステップ定義表
+
+**本スキルにおけるステップの唯一の定義**。チェックポイント選択・スキップ選択・タスク登録・実行手順はすべてこの表を参照する。ステップを増減する場合はこの表の修正だけで完結させること。
+
+| # | ステップ | 実行形態 | 呼び出し | 主な成果物 | 前提成果物 | 並列 |
+|---|---|---|---|---|---|---|
+| 1 | research | inline | Skill `/research <issue> <mode>` | research.html | — | — |
+| 2 | plan | inline | Skill `/plan <issue> <mode>` | plan.html, checklist.html | research.html | — |
+| 3 | review-plan | subagent | Agent → `/review-plan <issue>` | review-plan.html | plan.html, checklist.html | — |
+| 4 | implement | inline | Skill `/implement <issue> <mode>` | コード, implementation-notes.md, report.html | plan.html | — |
+| 5 | create-pr-text | subagent | Agent → `/create-pr-text <issue>` | pr.md | plan.html, report.html | A |
+| 6 | test | inline | Skill `/test <issue> <mode>` | checklist.html 更新, screenshots/ | checklist.html, implementation-notes.md | A |
+| 7 | review | inline | Skill `/review <issue>` | review.html | 実装済みコード | — |
+| 8 | quiz | subagent | Agent → `/quiz <issue>` | quiz.html | report.html, review.html | B |
+| 9 | notify-discord | inline | Skill `/notify-discord <サマリ>` | — | — | B |
+
+- 成果物はすべて `tmp/issues/<issue番号>/` 配下
+- **実行形態**
+  - `inline`: Skill ツールで本会話内で実行する。ユーザーとの対話・コード変更・ブラウザ操作を伴うステップ
+  - `subagent`: Agent ツール(`general-purpose`)で別コンテキストとして実行する。対話が不要で「成果物を書いて要約を返す」ステップ。メイン会話のコンテキスト消費を抑え、review-plan では **plan 作成の文脈を持たない独立視点** も担保する
+- **並列**: 同じグループ記号のステップは同時に実行する(「並列グループの実行」参照)
+
+## 開始時セットアップ
+
+以下を **1 回の AskUserQuestion にまとめて** 質問する(mode が引数で指定済みならその質問は省く)。このセットアップ質問は mode の「質問しない」制約の**適用対象外**(mode 確定前のセットアップであるため)。
+
+1. **mode**: `auto` / `normal`(推奨: `normal`)
+2. **チェックポイント**(multiSelect): ステップ 1〜8 のうち「完了後に停止して内容を確認したいステップ」を 0 個以上(デフォルト: なし)
+3. **スキップ**(multiSelect): ステップ 1〜9 のうち「実行しないステップ」を 0 個以上(デフォルト: なし)
+
+### mode の挙動
 
 | mode | 挙動 |
 | --- | --- |
-| `auto` | ユーザーに一切質問せず、plan の方針選択も推奨案で自動決定して最後まで進める |
-| `normal` | plan の方針選択のみユーザーに質問する。それ以外は中断せず最後まで進める |
-| `careful` | 各ステップの開始前と、重要な判断ポイントでユーザーに確認を取る |
+| `auto` | パイプライン中はユーザーに質問しない。plan の方針選択・曖昧な要件・config 追記もすべて推奨案で自動決定し、**置いた仮定は各成果物に明記させる** |
+| `normal` | plan の方針選択と config 追記の承認のみ質問する。それ以外は中断せず進める |
 
-`mode` が省略された場合は、最初の手順として AskUserQuestion で mode を選択してもらう（デフォルト推奨は `normal`）。
+- mode は inline ステップの**呼び出し引数として明示的に渡す**(例: `/plan 123 auto`)。サブスキル側の質問要否は渡された mode に従う
+- subagent ステップは設計上ユーザーへ質問できないため mode に依存しない(質問が発生しない作りのステップのみを subagent にしている)
+- チェックポイント停止・ループ上限到達時の報告は mode に関わらず必ず行う
 
-## レビューポイント（チェックポイント）の選択
+## 状態の永続化(dev-state.json)
 
-**mode に関わらず**、`/dev` の開始時に `AskUserQuestion` で「どのステップ完了後にユーザーが内容を確認・レビューするためにいったん停止するか」を選択してもらう。これは `auto` / `normal` で勝手に最後まで進んでしまうのを防ぐためのユーザー制御点。
+セットアップ完了時に `tmp/issues/<issue番号>/dev-state.json` を書き出し、ステップの開始・完了・ループ突入のたびに更新する。コンテキスト圧縮や中断を跨いでも選択と進捗を復元するため。
 
-### 質問内容
+```json
+{
+  "issue": 123,
+  "mode": "normal",
+  "checkpoints": ["plan", "review"],
+  "skips": [],
+  "loops": { "review_plan": 0, "test": 0, "review": 0 },
+  "steps": { "research": "completed", "plan": "in_progress" }
+}
+```
 
-`multiSelect: true` で以下の選択肢を提示し、停止してほしいポイントを 0 個以上選んでもらう（デフォルトは全選択なし = 中断なし）:
-
-- `research` 完了後（plan に進む前）
-- `plan` 完了後（review-plan に進む前）
-- `review-plan` 完了後（implement に進む前）
-- `implement` 完了後（create-checklist に進む前）
-- `create-checklist` 完了後（create-pr-text に進む前）
-- `create-pr-text` 完了後（test に進む前）
-- `test` 完了後（review に進む前）
-- `review` 完了後（notify-discord に進む前）
-
-選択結果は内部状態として保持し、各ステップの完了後に該当する場合は停止する。
-
-### 停止時の挙動
-
-選択されたチェックポイントに到達したら、`/dev` の進行を**一時停止**し、ユーザーに以下を提示する:
-
-- 直前ステップの成果物のパス（例: `tmp/issues/<issue番号>/plan.html`）
-- 次に実行されるステップ
-
-その上で `AskUserQuestion` で以下の選択肢を提示する:
-
-- **続行**: 次のステップに進む
-- **中断**: ここで `/dev` を終了する（残タスクは `cancelled` にする）
-- **前のステップを再実行**: 直前のステップをやり直す（成果物は更新モードで再生成）
-
-ユーザーが回答するまで次のステップに進まない。
-
-### mode との関係
-
-- `auto` / `normal` / `careful` のいずれでも、選択されたチェックポイントでは必ず停止する
-- `careful` モードはチェックポイント選択とは独立に「各ステップの開始前」での確認も従来どおり行う
-- チェックポイントが 0 個 = 従来どおり mode の挙動だけで進行
-
-## スキップするステップの選択
-
-レビューポイント選択に続けて、**`/dev` の開始時に `AskUserQuestion` で「スキップするステップ」を選択してもらう**。「PR を作らないので create-pr-text は不要」「ローカル動作確認だけで Discord 通知は要らない」のように、毎回全 9 ステップを回す必要がない場合の制御点。
-
-### 質問内容
-
-`multiSelect: true` で以下の選択肢を提示し、スキップしたいステップを 0 個以上選んでもらう（デフォルトは全選択なし = すべて実行）:
-
-- `research` をスキップ
-- `plan` をスキップ
-- `review-plan` をスキップ
-- `implement` をスキップ
-- `create-checklist` をスキップ
-- `create-pr-text` をスキップ
-- `test` をスキップ
-- `review` をスキップ
-- `notify-discord` をスキップ
-
-選択結果は内部状態として保持する。
-
-### スキップ時の挙動
-
-- 該当ステップに到達した時点で Skill 呼び出しを行わず、対応する Task を `cancelled` に更新して次のステップへ進む
-- スキップされたステップが**他ステップの前提成果物を生成するもの**（例: `plan` → `plan.html` を `implement` が参照）の場合、後続ステップは既存の成果物（前回実行時のもの）を利用する。存在しなければユーザーに警告し、続行可否を確認する
-- 同様に**サブループの起点**（`/test` の失敗ループ、`/review-plan` のサブループ）がスキップされた場合は当該ループも発生しない
-- スキップしたステップに対応するレビューポイントが選択されていた場合、そのチェックポイントは無効化する（実行されないステップで停止する意味がないため）
-
-### 整合性チェック
-
-選択結果に明らかな矛盾がある場合は警告してユーザーに再選択を促す:
-
-- `plan` をスキップしたが `implement` を実行する場合 → `plan.html` の事前存在を確認し、無ければ警告
-- `create-checklist` をスキップしたが `test` を実行する場合 → `checklist.html` の事前存在を確認し、無ければ `/test` 内の fallback（チェックリストをその場で作成）に委ねる
-
-### mode との関係
-
-- `auto` / `normal` / `careful` のいずれでも、選択されたスキップ設定は必ず適用される
-- スキップが 0 個 = 従来どおり全 9 ステップを実行
+`/dev` 開始時に同 issue の dev-state.json が既に存在する場合は内容を読み、未完了の最初のステップからの再開をユーザーに提案する(auto では自動で再開する)。
 
 ## 作業ブランチの準備
 
-mode / レビューポイント / スキップステップの選択が完了したら、**TaskCreate より前に** 作業ブランチを準備する。実装コミットが `main` や無関係なブランチに混ざるのを防ぐためのガード。
+セットアップ完了後、TaskCreate より前に実行する。実装コミットがベースブランチや無関係なブランチに混ざるのを防ぐガード。
 
-### 手順
+1. **ベースブランチの確定**: `tmp/config.json` の `base_branch` を読む。無ければ `git remote show origin` の HEAD branch から検出し、`tmp/config.json` に保存する(以降 `<base>` と表記)
+2. `git rev-parse --abbrev-ref HEAD` で現在のブランチ名を取得する。期待するブランチ名は **`issue-<issue番号>`**
+3. 比較して分岐:
+   - **一致**: そのまま進む
+   - **不一致**: `git rev-parse --verify issue-<issue番号>` で存在確認し、存在すれば checkout、存在しなければ以下を順に実行
+     1. `git status --porcelain` で未コミットの変更を確認。**変更がある場合は中断してユーザーに対処を促す**(自動 stash / commit / discard はしない)
+     2. `git fetch origin <base>`
+     3. `git checkout -b issue-<issue番号> origin/<base>`(ローカル `<base>` を経由しない)
+4. 既存のブランチ名規約が `issue-<issue番号>` と異なるプロジェクトでは、動作を変える前にユーザーに相談する
 
-1. `git rev-parse --abbrev-ref HEAD` で現在のブランチ名を取得する
-2. 期待するブランチ名は **`issue-<issue番号>`**（例: issue 123 なら `issue-123`）
-3. 現在のブランチ名との比較で分岐:
-   - **一致する場合**: そのまま進む
-   - **一致しない場合**:
-     - `git rev-parse --verify issue-<issue番号>` でブランチの存在を確認
-     - **存在する**: `git checkout issue-<issue番号>` で切り替える
-     - **存在しない**: 以下を順に実行してブランチを作成する
-       1. `git status --porcelain` で未コミットの変更がないか確認。**変更がある場合は中断してユーザーに対処を促す**（自動 stash / commit / discard はしない）
-       2. `git fetch origin main` で main の最新を取得
-       3. `git checkout -b issue-<issue番号> origin/main` で main から新規ブランチを切る（ローカル main を経由しない）
+## タスク管理
 
-### mode との関係
+セットアップ後、ステップ定義表の各ステップ(スキップ対象を除く)を TaskCreate で一括登録する。
 
-- `auto` / `normal` / `careful` いずれでも上記手順は必ず実行する
-- `careful` の場合のみ、ブランチ作成・切り替え前にユーザーに確認を取る
-
-### 注意事項
-
-- 既存のブランチ名規約が `issue-<issue番号>` と異なる場合は、本スキルの動作を変える前にユーザーに相談する（プロジェクト固有の命名規則は将来的に `config.json` 化を検討）
-- 未コミットの変更がある状態で勝手に `stash` / `reset` / `checkout` しない（破壊的操作の回避）
-
-## タスク管理（Task ツール）
-
-`/dev` の進行状況は Claude Code の **Task ツール（TaskCreate / TaskUpdate / TaskList）** で管理する。ユーザーに進捗が可視化されると同時に、再開時の状態把握にも使う。
-
-### 初期化
-
-mode 選択（必要なら）、**レビューポイント選択**、**スキップステップ選択**が完了したら、`TaskCreate` で以下 9 タスクを一括登録する（**スキップ対象は最初から `cancelled` で登録**し、残りは `pending`）:
-
-1. `research` — issue 調査
-2. `plan` — 実装計画作成
-3. `review-plan` — 計画レビュー
-4. `implement` — 実装
-5. `create-checklist` — 動作確認チェックリスト作成
-6. `create-pr-text` — PR テキスト作成
-7. `test` — ブラウザ動作確認
-8. `review` — コードレビュー
-9. `notify-discord` — Discord 通知
-
-### 進行管理ルール
-
-- 各ステップに入る直前に該当タスクを `TaskUpdate` で `in_progress` に変更
-- ステップが正常完了したら即座に `completed` に変更（**バッチ更新しない**）
-- 同時に `in_progress` にできるのは **1 タスクのみ**
-- サブループ（`/review-plan` で修正必須、`/test` で失敗）に入った場合は、既存タスクを `in_progress` のまま保ち、必要に応じて TaskCreate でループ内サブタスク（例: `replan-round-2`）を追加してよい
-- ループ完了後にサブタスクを `completed` に、本流タスクも `completed` に進める
-- 上限到達で失敗終了した場合は該当タスクを `cancelled` にし、後続タスクも `cancelled` にする
+- 各ステップの開始直前に `in_progress`、正常完了で即座に `completed` に更新する(バッチ更新しない)
+- 同時に `in_progress` にできるのは原則 1 タスク。**例外: 同じ並列グループのステップは同時に `in_progress` にしてよい**
+- ループ突入時は既存タスクを `in_progress` のまま保ち、必要ならループ内サブタスク(例: `replan-round-2`)を追加する
+- 上限到達などで失敗終了する場合は、残タスクを削除して dev-state.json に理由を記録し、ユーザーに報告する
 
 ## 実行手順
 
-以下の順に各スキルを Skill ツールで呼び出す（`<issue番号>` は上記で正規化したもの）。各ステップ開始時に対応する Task を `in_progress` に、完了時に `completed` に更新する。
+ステップ定義表の順に実行する。各ステップで:
 
-1. `/research <issue番号>` — issue に関連するコードベースや背景情報を調査する
-2. `/plan <issue番号>` — 実装計画を作成し、方針を決定する（`normal` / `careful` ではユーザーに選択してもらう）
-3. `/review-plan <issue番号>` — plan の影響範囲を独立視点で検証する。**修正必須が 1 件以上**ある場合は step 2 (`/plan`) に戻って計画を修正してから再度 `/review-plan` を実行する（このサブループは plan 修正で OK が出るまで繰り返す。上限 3 回）
-4. `/implement <issue番号>` — 計画に基づいてコードを実装する
-5. `/create-checklist <issue番号>` — 動作確認チェックリストを作成する
-6. `/create-pr-text <issue番号>` — PR のタイトルと説明文を作成する
-7. `/test <issue番号>` — チェックリストに沿ってブラウザで動作確認テストを実行する
-8. `/review <issue番号>` — コードレビューを行う
-9. `/notify-discord` — Discord に実施内容を簡潔にリッチテキスト形式で送信する
+1. **スキップ判定**: スキップ指定されていれば Skill / Agent 呼び出しを行わず次のステップへ
+2. **前提成果物の確認**: 表の「前提成果物」が存在するか確認する。存在しない場合(スキップや前回実行の欠如による):
+   - サブスキル側に fallback があればそれに委ねる
+   - fallback が無い場合 — `auto`: 警告を dev-state.json に記録し、続行可能なら続行、不可能ならそのステップもスキップ扱いにする。`normal`: ユーザーに続行可否を確認する
+3. **実行**: 実行形態に従って呼び出す(inline = Skill ツール + mode 引数、subagent = Agent ツール。後述)
+4. **チェックポイント判定**: 指定されていれば停止する(「チェックポイント停止の挙動」参照)
 
-## テスト失敗時の再計画ループ
+### subagent への依頼形式
 
-step 7 (`/test`) でチェックリストの項目に失敗が発生した場合、step 2 (`/plan`) に戻ってやり直す。
+Agent ツール(`subagent_type: general-purpose`)で起動し、プロンプトに以下を含める:
 
-- 再計画時は `tmp/issues/<issue番号>/` 配下の既存成果物（`plan.html` / `checklist.html` / `pr.md` など）を新規作成し直すのではなく、失敗内容を反映して**更新**する。各サブスキルは既存ファイルがあれば追記・修正の方針で動作する想定
-- 再計画後は step 3 (`/review-plan`) を必ず再度実行する
-- `/implement` 以降も、既存の実装・チェックリスト・PR テキストを失敗内容に応じて修正する
-- ループ上限は **3 回**（初回実行 + 再計画 2 回 = 最大 3 回の `/test` 実行）。上限に達してもテストが通らない場合はループを終了し、失敗内容をユーザーに報告して判断を仰ぐ
-- ループ再突入時の質問頻度は mode に従う。`auto` は確認なしで即ループ、`normal` も原則ループは自動で回すが再計画時の方針選択のみ質問、`careful` は各ループの開始前にユーザーに継続可否を確認
+- Skill ツールで対象スキルを実行すること(例: `Skill ツールで review-plan を args「123」で実行してください`)
+- リポジトリルートと成果物ディレクトリ(`tmp/issues/<issue番号>/`)の**絶対パス**
+- 「ユーザーへの質問はできない。判断に迷う場合は保守的に倒し、その旨を成果物に明記する」という制約
+- 最終メッセージで返すサマリの形式:
+  - review-plan: 判定(OK / 差し戻し)、must / should / OK の件数、must の要旨(1 行ずつ)
+  - create-pr-text / quiz: 生成した成果物のパスと要点
 
-## config への学習機構（手戻りを防御に変換する）
+### 並列グループの実行
 
-step 7 (`/test`) の失敗、または step 8 (`/review`) の指摘で、**plan が見落としていた間接依存・暗黙の必須セット・カスケード**が判明した場合、それを今後の `/plan` と `/review-plan` で防げるよう、両スキルの `config.json` の `attentions` 配列に追記する。
+- **グループ A(create-pr-text ∥ test)**: create-pr-text の subagent を background で起動した**直後に** test を inline で実行する。両方の完了を確認してから review へ進む
+- **グループ B(quiz ∥ notify-discord)**: quiz の subagent を background で起動した直後に notify-discord を inline で実行する。両方の完了を確認してから `/dev` を終了する
+- グループ内のステップに**チェックポイントが指定されている場合、そのグループは表の順の直列実行に落とす**(停止位置を明確にするため)
+- グループ内の片方がスキップされた場合、残りを単独で通常実行する
+
+### notify-discord への引数
+
+dev が実施内容のサマリ(issue 番号とタイトル、実施したステップ、テスト結果、レビュー結果の要点、主要成果物のパス)を組み立てて `/notify-discord <サマリ>` として渡す。notify-discord 側からユーザーへの質問が発生しない状態で呼び出すこと。
+
+## ループ(3 種)と上限
+
+| ループ | 発動条件 | 戻り先 | 上限 |
+|---|---|---|---|
+| review-plan 差し戻し | 修正必須(must)が 1 件以上 | plan(修正)→ review-plan 再実行 | 3 回 |
+| test 失敗 | チェックリストに失敗項目 | plan(更新)→ review-plan → implement → …(表の順に再実行) | test 実行 3 回 |
+| review 差し戻し | must 指摘が 1 件以上 | implement(指摘の修正)→ review 再実行 | review 実行 3 回 |
+
+- 各ループは**独立にカウント**し、dev-state.json の `loops` に記録する
+- 再計画・修正時は `tmp/issues/<issue番号>/` の既存成果物を新規作成し直すのではなく、失敗・指摘内容を反映して**更新**する
+- **review ループで実装が変わった場合は pr.md も更新する**(create-pr-text を subagent で再実行)
+- 上限に達しても解消しない場合はループを終了し、状況をユーザーに報告して判断を仰ぐ(**auto でもここは停止する**)
+- ループ再突入時の確認頻度は mode に従う(auto: 確認なし、normal: 再計画時の方針選択のみ)
+
+## 完了の定義(DoD)ゲート
+
+review ループを抜けたら、グループ B に進む前に plan.html の「完了の定義(Definition of Done)」を読み、各項目の充足を検証する。
+
+- 各項目を**証跡に基づいて**判定する(例: checklist.html の全項目が checked / review.html の must が 0 / lint・type check が pass / 必要なドキュメント更新済み)
+- 判定結果を dev-state.json に記録する
+- **未充足項目がある場合**: 対応するループ(test / review)または implement に戻る。該当ループが上限到達済みならユーザーに報告して判断を仰ぐ
+- 全項目充足でグループ B へ進む
+
+## チェックポイント停止の挙動
+
+指定されたステップの完了後、進行を一時停止し、直前ステップの成果物パスと次に実行されるステップを提示した上で AskUserQuestion で選択してもらう:
+
+- **続行**: 次のステップに進む
+- **中断**: `/dev` を終了する(残タスクは削除し、dev-state.json に記録)
+- **前のステップを再実行**: 直前のステップを更新モードでやり直す(再実行後、同じチェックポイントで再度停止する)
+
+ユーザーが回答するまで次のステップに進まない。
+
+## config への学習機構(手戻りを防御に変換する)
+
+以下のいずれかで、plan が見落としていた**間接依存・暗黙の必須セット・カスケード**が判明した場合、今後の `/plan` と `/review-plan` で防げるよう、両スキルの `config.json` の `attentions` 配列に追記する(完全重複運用)。
+
+1. **implement 完了時**: implementation-notes.md の「Deviations」に記録された逸脱(**手戻りが起きる前の一次情報**。最速の学習源として implement 完了ごとに必ず確認する)
+2. **test 失敗時**: 失敗原因の分析結果
+3. **review 指摘時**: must / should の指摘内容
 
 ### 追記の判断基準
 
 以下のいずれかに該当する場合、追記候補とする:
 
-- 「コードに直接現れない依存」だった（trigger / subscriber / 設定 / 暗黙の必須セット等）
-- プロジェクト固有のフレームワーク慣習が原因だった（特定のディレクトリにある自動登録など）
+- 「コードに直接現れない依存」だった(trigger / subscriber / 設定 / 暗黙の必須セット等)
+- プロジェクト固有のフレームワーク慣習が原因だった(特定のディレクトリにある自動登録など)
 - 同種の手戻りが今後別 issue でも起きうる汎用的な内容である
 
-逆に、以下は追記しない:
-- その issue 限りの個別事情
-- コード grep で素直に辿れる直接依存
-- 既に同等の内容が `attentions` に存在する
+逆に、以下は追記しない: その issue 限りの個別事情 / コード grep で素直に辿れる直接依存 / 既に同等の内容が `attentions` に存在する。
 
-### 追記内容のフォーマット
+### フォーマットと mode ごとの挙動
 
-`attentions` には自然言語 1 行（または短い段落）で記述する。例:
+`attentions` には自然言語 1 行(または短い段落)で記述する。例:
 
 ```
 "Firestore `orders/{orderId}` への書き込みは functions/src/triggers/onOrderWrite.ts を発火し、Discord 通知文面の更新も必要"
 ```
 
-### 追記先
-
-`skills/plan/config.json` と `skills/review-plan/config.json` の **両方** に同じ内容を追記する（完全重複運用）。
-
-### mode ごとの挙動
-
 - `auto`: ユーザー確認なしで両 config に自動追記
-- `normal`: 追記候補の内容と追記先をユーザーに提示し、承認されれば追記
-- `careful`: 追記候補ごとに追記要否と文言をユーザーに確認
+- `normal`: 追記候補の内容と追記先を提示し、承認されれば追記
 
 ## 注意事項
 
-- mode に応じた質問頻度を守る。`auto` では一切質問しない、`normal` では plan の方針選択と config 追記の承認のみ、`careful` では各ステップ前に確認する
-- `auto` / `normal` の場合、mode で定められていないタイミングでは中断せず最後まで進める
-- **ただし、開始時に選択されたレビューポイントでは mode に関わらず必ず停止する**（「レビューポイント（チェックポイント）の選択」参照）
-- **開始時にスキップ指定されたステップは Skill 呼び出しを行わず Task を `cancelled` にして次へ進む**（「スキップするステップの選択」参照）
-- テスト失敗時は上記「テスト失敗時の再計画ループ」に従う
-- `/review-plan` で修正必須が出た場合は plan の修正 → `/review-plan` 再実行のサブループを回す（上限 3 回）。これはテスト失敗ループとは独立にカウントする
+- mode に応じた質問頻度を守る。セットアップ質問・チェックポイント停止・ループ上限到達時の報告・DoD 未充足かつループ上限到達時の報告は mode の適用対象外(必ず行う)
+- ステップの増減・並列グループの変更はステップ定義表の修正だけで完結させる
+- サブスキル間の成果物規約(必須セクション・フォーマット)は各サブスキルの SKILL.md が定義する。dev は **成果物パスの受け渡し・実行順序・ループ・状態管理** にのみ責務を持つ
+- subagent の結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行に切り替える

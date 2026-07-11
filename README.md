@@ -27,6 +27,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | cloud-logging | `/cloud-logging <自然言語クエリ>` | gcloud CLI 経由で Cloud Logging のログを取得・分析 |
 | notify-discord | `/notify-discord <メッセージ>` | Discord Webhook でメッセージを送信（初回は webhook URL を保存） |
 | nanobanana | `/nanobanana <プロンプト> [--model flash\|pro] [--aspect 16:9] [--size 1K]` | Gemini の画像生成モデル (nanobanana) で画像生成し `tmp/images/` に保存。`GEMINI_API_KEY` 必須 |
+| prototype | `/prototype [アイデア]` | アイデアの壁打ち（発散→収束）から、スタック選定・実装・動作確認・デモ整備・フィードバックループまで一気通貫でプロトタイプを作る |
 
 ### Firebase 統合
 

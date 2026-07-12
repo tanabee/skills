@@ -37,6 +37,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | スキル | 説明 |
 |-------|------|
 | firebase-auth-internal-app | Firebase Auth を社内向けアプリに統合（Blocking Functions によるドメイン制限、Firestore へのユーザー登録を含む） |
+| firebase-emulator | Firebase Emulator Suite への REST / Admin SDK アクセスをリトライなしで行う（`Bearer owner` の使い分け、`127.0.0.1` 固定、データ全削除、Auth Emulator でのトークン取得、症状→原因→対処のトラブルシュート集） |
 
 ## 出力
 

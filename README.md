@@ -30,6 +30,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | prototype | `/prototype [アイデア]` | アイデアの壁打ち（発散→収束）から、スタック選定・実装・動作確認・デモ整備・フィードバックループまで一気通貫でプロトタイプを作る |
 | open | `/open <path>` | ファイルやフォルダを種別に応じて開き分ける（`.md` は grip でブラウザ表示、`.html` はデフォルトブラウザ、フォルダは Finder、その他は Antigravity IDE） |
 | copy | `/copy <path\|text>` | ファイルの中身・テキスト・会話中の直前の出力をクリップボードにコピー（画像は osascript で画像としてコピー） |
+| export | `/export [html\|md] [出力先]` | 会話で直近に調べた・生成した内容を HTML / Markdown ファイルに書き出す（未指定なら html で `tmp/` に保存）。出力後は open スキルのルールで自動的に開く |
 
 ### Firebase 統合
 

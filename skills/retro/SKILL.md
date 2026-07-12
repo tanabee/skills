@@ -1,7 +1,7 @@
 ---
 name: retro
 description: 直近の Claude Code 会話ログを分析し、CLAUDE.md / .claude/skills / .claude/rules / .claude/settings* の改善案を提案・適用するレトロスペクティブスキル。ユーザーが「retro して」「振り返りして」「最近の会話から CLAUDE.md (や skills, rules, settings) を改善して」「繰り返し指摘していることをルール化して」など、過去のやり取りをもとに設定・スキルを改善する意図を示したら必ず使用する。
-allowed-tools: Bash, Read, Glob, Grep, Write, Edit, AskUserQuestion
+allowed-tools: Bash, Read, Glob, Grep, Write, Edit, AskUserQuestion, WebFetch, WebSearch
 ---
 
 直近の会話ログから「繰り返し発生している指示・訂正・手戻り・許可プロンプト」を抽出し、設定ファイルへの恒久的な改善として提案・適用する。目的は同じフィードバックを二度と繰り返させないこと。
@@ -48,20 +48,33 @@ facets の friction (`misunderstood_request` / `wrong_approach` / `buggy_code` /
 
 判断基準: **1 回きりの指示はノイズ、繰り返しはシグナル**。既に CLAUDE.md / rules / memory に書かれている内容の再提案はしない (適用前に既存記述を必ず確認する)。
 
-### 5. HTML レポートの生成
+### 5. 公式ベストプラクティスとの突き合わせ
+
+改善候補が出揃ったら、関連する公式ドキュメント・ブログを参照して提案を裏付ける。目的は 2 つ: (a) 提案内容が公式推奨に沿っているか確認し出典を付ける、(b) ログには現れないが対象ファイルが公式推奨から明確に外れている点 (肥大化した CLAUDE.md、曖昧なスキル description 等) を発見する。
+
+| ソース | 用途 |
+|---|---|
+| https://code.claude.com/docs/llms.txt | 公式ドキュメント全体の目次。ここから memory / skills / settings / hooks など該当トピックの `.md` を辿る (各ページは URL 末尾 `.md` で Markdown 取得可) |
+| https://www.anthropic.com/engineering/claude-code-best-practices | CLAUDE.md・ワークフローの公式ベストプラクティス |
+| https://claude.com/blog | Claude 公式ブログ。新機能の発表や活用事例。改善候補に関連する記事がないか一覧を眺める |
+| WebSearch (`site:anthropic.com/engineering`, `site:claude.com/blog` 等) | 上記でカバーされない新しい公式記事の探索 |
+
+改善候補に関連するページだけを WebFetch で読む (網羅的に読まない)。ベストプラクティス由来の提案はログ由来の提案と区別してレポートに載せ、出典 URL を根拠に含める。
+
+### 6. HTML レポートの生成
 
 提案を self-contained HTML (CSS インライン、ライト/ダーク両対応) としてプロジェクト root の `tmp/retro-YYYYMMDD.html` に出力し、デフォルトブラウザで開く (open スキルの開き分けと同じ)。各提案には以下を含める:
 
 - 改善先ファイルパスと変更種別 (追記 / 修正 / 削除)
-- 根拠: 該当する会話の引用 (必要最小限) と発生回数・セッション数
+- 根拠: 該当する会話の引用 (必要最小限) と発生回数・セッション数、あれば公式ドキュメントの出典 URL
 - 変更内容: 適用されるテキストを diff 風に提示
 - 推奨度 (5 段階) と理由
 
-### 6. 承認と適用
+### 7. 承認と適用
 
 `AskUserQuestion` (multiSelect) で適用する提案を選んでもらい、**承認されたものだけ** Edit / Write で適用する。グローバル CLAUDE.md と settings* は影響が大きいので、適用後に diff を報告する。
 
-### 7. 実行履歴の追記
+### 8. 実行履歴の追記
 
 適用完了後、`config.json` の `runs` 末尾にエントリを追記する。**適用ゼロでも必ず記録する** (次回実行の分析起点になるため)。現在時刻は `date -Iseconds` で取得する。
 

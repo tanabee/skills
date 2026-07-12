@@ -28,7 +28,8 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | notify-discord | `/notify-discord <メッセージ>` | Discord Webhook でメッセージを送信（初回は webhook URL を保存） |
 | nanobanana | `/nanobanana <プロンプト> [--model flash\|pro] [--aspect 16:9] [--size 1K]` | Gemini の画像生成モデル (nanobanana) で画像生成し `tmp/images/` に保存。`GEMINI_API_KEY` 必須 |
 | prototype | `/prototype [アイデア]` | アイデアの壁打ち（発散→収束）から、スタック選定・実装・動作確認・デモ整備・フィードバックループまで一気通貫でプロトタイプを作る |
-| open-file | `/open-file <path>` | ファイルを種別に応じて開き分ける（`.md` は grip でブラウザ表示、`.html` はデフォルトブラウザ、その他は Antigravity IDE） |
+| open | `/open <path>` | ファイルやフォルダを種別に応じて開き分ける（`.md` は grip でブラウザ表示、`.html` はデフォルトブラウザ、フォルダは Finder、その他は Antigravity IDE） |
+| copy | `/copy <path\|text>` | ファイルの中身・テキスト・会話中の直前の出力をクリップボードにコピー（画像は osascript で画像としてコピー） |
 
 ### Firebase 統合
 

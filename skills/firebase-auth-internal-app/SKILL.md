@@ -35,6 +35,7 @@ Using `beforeUserCreated`, implement the following:
 - Determine the domain from the user's email address
 - If the domain is allowed, register user information in the Firestore `users` collection
 - If the domain is not allowed, return an error to reject sign-in
+- Set the initial `role` in Custom Claims via the return value (`return { customClaims: ... }`), so it is included in the ID token from the first sign-in
 
 Use AskUserQuestion to ask the user for the allowed email domain(s) (e.g., `example.com`). For multiple domains, ask for comma-separated input.
 
@@ -46,6 +47,7 @@ Also confirm the following:
 Implement based on [references/custom_claims.md](references/custom_claims.md).
 
 Use `onDocumentWritten` to monitor changes to `users/{id}` documents and sync permission information to Custom Claims:
+- Initial claims are set by the `beforeUserCreated` return value (section 2); this trigger handles subsequent updates only
 - When the permission field in a `users` document is updated, reflect it in the ID token via `setCustomUserClaims`
 - On the client side, Custom Claims in the token can be used for permission control
 

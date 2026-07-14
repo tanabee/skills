@@ -47,8 +47,20 @@ module.exports = beforeUserCreated(async (event) => {
     role: ROLE.USER,
     createdAt: Timestamp.now(),
   });
+
+  // Returned customClaims are persisted to the user record and
+  // included in the ID token from the first sign-in
+  return {
+    customClaims: { role: ROLE.USER },
+  };
 });
 ```
+
+### Setting Initial Custom Claims via Return Value
+
+Set the initial Custom Claims by returning `{ customClaims: {...} }` from `beforeUserCreated`. Unlike `setCustomUserClaims`, which only takes effect on the next token refresh, returned claims are included in the ID token issued at first sign-in — so security rules referencing `request.auth.token.role` work from the very first session. Subsequent `role` changes are synced by the Firestore trigger (see [custom_claims.md](custom_claims.md)).
+
+Note: Custom Claims must not exceed 1,000 bytes when serialized.
 
 ## Deployment
 

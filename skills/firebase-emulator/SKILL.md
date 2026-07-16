@@ -85,4 +85,5 @@ Match the symptom against [references/troubleshooting.md](references/troubleshoo
 
 - `demo-*` project ids run fully offline and can never touch production — prefer them for throwaway tests; real project ids are fine when working with imported data.
 - Prefer REST over browser UI operations for verifying triggers and state transitions — faster and immune to stale-UI issues. Confirm trigger firing via emulator logs, not UI.
+- The Emulator UI defaults to port 4000 but auto-increments on conflict (4001, ...). Before giving the user a UI URL, confirm the actual port from the startup logs or the Hub (`curl -s http://127.0.0.1:4400/emulators`).
 - Keep HTTP header values ASCII-only; non-ASCII values get mangled.

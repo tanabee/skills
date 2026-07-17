@@ -69,10 +69,19 @@ chrome-devtools get_network_request --reqid 1 --requestFilePath req.md --respons
 ## Performance
 
 ```bash
-chrome-devtools performance_start_trace true true --filePath t.gz
+chrome-devtools performance_start_trace --reload true --autoStop true --filePath t.gz
 chrome-devtools performance_stop_trace --filePath t.json
 chrome-devtools performance_analyze_insight "1" "LCPBreakdown"
-chrome-devtools take_memory_snapshot ./snap.heapsnapshot
+```
+
+## Memory (heap snapshot)
+
+```bash
+chrome-devtools take_heapsnapshot ./snap.heapsnapshot
+chrome-devtools get_heapsnapshot_summary          # クラス別サマリ
+chrome-devtools compare_heapsnapshots ./a.heapsnapshot ./b.heapsnapshot
+chrome-devtools get_heapsnapshot_retaining_paths --maxDepth 10
+chrome-devtools close_heapsnapshot
 ```
 
 ## Extensions
@@ -101,5 +110,7 @@ chrome-devtools stop     # 停止
 chrome-devtools click_at 100 200            # --experimentalVision=true
 chrome-devtools screencast_start            # --experimentalScreencast=true (要 ffmpeg)
 chrome-devtools screencast_stop
-chrome-devtools list_webmcp_tools           # --experimentalWebmcp=true
+chrome-devtools list_webmcp_tools           # --categoryExperimentalWebmcp=true (Chrome 149+)
+chrome-devtools execute_webmcp_tool <name>  # 同上
+chrome-devtools list_3p_developer_tools     # --categoryExperimentalThirdParty=true
 ```

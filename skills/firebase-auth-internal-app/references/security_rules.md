@@ -17,7 +17,14 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isUser() || (request.auth.uid == userId);
-      allow write: if isAdmin() || (request.auth.uid == userId);
+      // Self-updates must not change `role`, otherwise a user could escalate
+      // their own privileges (the Firestore trigger syncs `role` to Custom Claims)
+      allow update: if isAdmin()
+        || (request.auth.uid == userId
+            && request.resource.data.role == resource.data.role);
+      // Documents are created by beforeUserCreated and "deleted" via role change,
+      // both server-side (Admin SDK bypasses rules), so clients never need these
+      allow create, delete: if false;
     }
   }
 }
@@ -31,7 +38,8 @@ service cloud.firestore {
 ### users Collection Rules
 
 - **read**: Allowed for `user` / `admin` roles, or the user reading their own document.
-- **write**: Allowed for `admin` role, or the user writing to their own document.
+- **update**: Allowed for `admin` role. Users may update their own document only if `role` is unchanged — without this condition, a user could set their own `role` to `admin` and the Custom Claims sync trigger would grant them real admin privileges.
+- **create / delete**: Denied for clients. Creation happens in `beforeUserCreated` and deletion is expressed as `role: "deleted"`, both via the Admin SDK (which bypasses rules).
 
 ### Usage in Other Collections
 

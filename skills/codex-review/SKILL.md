@@ -1,97 +1,73 @@
 ---
 name: codex-review
-description: Codex CLI にコードレビューを依頼する。PR が存在する場合は PR を、ローカルブランチの場合はメインブランチとの差分をレビューする。
-allowed-tools: Bash, BashOutput, Read, Write, AskUserQuestion
+description: Codex 公式プラグイン (codex-plugin-cc) のネイティブレビューでコードレビューを実施する。PR 番号指定時は PR を、無指定時は現在ブランチとベースブランチの差分をレビューする。
+allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
-Codex CLI にコードレビューを依頼する。Claude Code は `codex exec` で自己完結したレビュープロンプトを渡すだけで、レビュー本体は Codex CLI 側で実施される。
+公式プラグイン `codex@openai-codex` の companion runtime(Codex ネイティブレビュー)にレビューを依頼する。レビュー本体は Codex 側で実施され、Claude Code は「対象の解決 → 実行 → 結果の HTML 整形」のみを担う。実行中のジョブは `/codex:status` で追跡できる。
 
 ## 引数
 
-`$ARGUMENTS` は PR 番号/URL（省略可）。`123`、`#123`、PR URL のいずれか。
+`$ARGUMENTS` は PR 番号/URL(省略可)。`123`、`#123`、PR URL のいずれか。
 
 ## 手順
 
-### 1. Codex CLI へレビューを依頼
+### 1. レビュー対象とモードの決定
 
-レビュー依頼は **同梱の sh ラッパー** `scripts/run-codex.sh` 経由で起動する。プロンプトを `Bash` 引数に直接渡すとシェルメタ文字でクォートが壊れて起動失敗するケースがあるため、**プロンプトを必ずファイルに書き出してそのパスを渡す**。ラッパー側で `--dangerously-bypass-approvals-and-sandbox` と `</dev/null` を付けて、承認プロンプトや stdin 待ちで止まらないようにする。
+1. PR 情報の取得:
+   - 引数あり: `gh pr view <引数> --json number,url,title,baseRefName,headRefName`
+   - 引数なし: `gh pr view --json number,url,title,baseRefName,headRefName` で現在ブランチの PR を確認
+2. モード判定:
 
-#### 1-1. プロンプトをファイルに書き出す
+| モード | 条件 | レビュー場所 |
+|---|---|---|
+| PR(カレント) | PR あり、`headRefName` == 現在ブランチ(`git rev-parse --abbrev-ref HEAD`) | 現在の作業ツリー |
+| PR(worktree) | PR あり、`headRefName` != 現在ブランチ | 一時 worktree |
+| ローカル | PR なし | 現在の作業ツリー |
 
-`Write` ツールで `tmp/codex-prompt-<タイムスタンプ>.txt` などの一時ファイルに以下の本文を書き出す。プレースホルダは書き出し時に展開する:
+3. ベースブランチ `<BASE>`:
+   - PR モード: PR の `baseRefName`。`git fetch origin <BASE>` してから ref は `origin/<BASE>` を使う
+   - ローカルモード: `tmp/config.json` の `base_branch`。無ければ `git remote show origin` の HEAD branch を検出して `tmp/config.json` に保存し、その値を使う
+4. 出力先 `<output-dir>`:
+   - PR モード: `tmp/prs/<PR 番号>`
+   - ローカルモード: `tmp/issues/<issue 番号>`(issue 番号は現在のブランチ名 `issue-<n>` から抽出。特定できなければユーザーに保存先を確認)
 
-- `<ARGS>`: `$ARGUMENTS` をそのまま展開する（空なら空文字列のまま）
-- `<BASE>`: `tmp/config.json` の `base_branch`。無ければ `git remote show origin` の HEAD branch を検出して `tmp/config.json` に保存し、その値を使う
+### 2. レビュー実行
 
-```
-以下の手順でコードレビューを実施してください。
+同梱の `scripts/run-codex-review.sh` が最新のプラグイン実体を解決して `codex-companion.mjs review` を起動する。フォアグラウンドで完了を待つ(`<skill-dir>` は本スキルのディレクトリの絶対パス)。
 
-## 手順
-
-### 1. 差分の取得
-- PR 番号/URL が指定された場合: `gh pr view` で PR 情報を取得し、`gh pr diff` で差分を取得（PR モード）
-- PR 番号/URL が空の場合: `gh pr view` を試み、現在のブランチに PR が存在するか確認する
-  - PR が存在する → PR モードで差分を取得
-  - PR が存在しない → `git diff <BASE>...HEAD` でベースブランチとの差分を取得（ローカルモード）
-
-### 2. 情報収集
-- PR モードの場合、PR の情報（タイトル、説明、関連 issue）を把握する
-- 関連する issue がある場合は `gh issue view` で issue の目的・要件を把握する
-- ローカルモードの場合、`tmp/issues/<issue番号>/` 配下の既存成果物を確認する:
-  - `plan.md` — 実装計画。意図した設計や変更方針との整合性を確認(md が無ければ `plan.html`。以降も同様)
-  - `report.md` — 実装レポート。実装者が認識している懸念点や追加変更を把握
-  - `implementation-notes.md` — 実装ノート。計画からの逸脱(Deviations)と実装中の判断を把握
-  - `checklist.html` — 受け入れテストチェックリスト。テストの網羅性を検証する基準
-  - `pr.md` — PR テキスト。PR の説明と実際の差分に乖離がないか確認
-
-### 3. レビュー実施
-変更ファイルごとにコードベースの該当箇所を読み、以下の観点でレビューする。出力フォーマットは `skills/codex-review/assets/template.html` を参照（**HTML で出力する**）:
-
-- **正確性**: ロジックにバグや抜け漏れがないか
-- **設計**: 責務分離、命名、既存パターンとの一貫性
-- **副作用 / 影響範囲**: 変更・削除・リネームしたシンボル（関数・型・定数・ファイルパス・設定キー等）の参照元が壊れていないか。シグネチャ変更による型エラー、削除した機能の呼び出し元、挙動変更による既存フローへの影響を `grep` 等で網羅的に確認する
-- **セキュリティ**: インジェクション、認証・認可の不備、機密情報の漏洩がないか
-- **パフォーマンス**: N+1 クエリ、不要な再レンダリング、計算量の問題がないか
-- **テスト**: テストの網羅性、境界値・異常系のカバレッジ
-- **可読性**: 複雑すぎるロジック、不明瞭な命名、過剰な抽象化がないか
-
-### 4. 結果の保存
-- PR モード: `tmp/prs/<PR 番号>/review-codex.html`
-- ローカルモード: `tmp/issues/<issue 番号>/review-codex.html`
-- `mkdir -p` で出力先ディレクトリを作成してから書き込む
-- 出力は `skills/codex-review/assets/template.html` のスタイルに準拠した完結した HTML ドキュメント（`<!DOCTYPE html>` から `</html>` まで）とする。重要度バッジ（must/should/nit）と観点タグの CSS クラスはテンプレートのものをそのまま利用する
-
-## 注意事項
-- 軽微なスタイルの指摘（空白、改行など）はリンターに任せ、レビューでは扱わない
-- 指摘には必ず該当ファイルと行番号を含める
-- 指摘ごとに重要度（must / should / nit）を付与する
-- 良い点も積極的にコメントする
-
-## 引数
-<ARGS>
-```
-
-#### 1-2. sh ラッパーで `codex exec` を起動
-
-`Bash` ツールで以下を実行する（`<prompt-file>` は 1-1 で書き出したファイルの絶対パス、`<skill-dir>` はこの skill のディレクトリの絶対パス）:
+PR(カレント)/ローカルモード:
 
 ```bash
-<skill-dir>/scripts/run-codex.sh <prompt-file>
+<skill-dir>/scripts/run-codex-review.sh --base origin/<BASE>
 ```
 
-- ラッパーは内部で `codex exec --dangerously-bypass-approvals-and-sandbox <prompt> </dev/null` を実行する
-- プロンプトファイルは実行終了時にラッパーが自動削除する（呼び出し側で `rm` 不要）
-- 起動はフォアグラウンド実行で構わない（Codex CLI の完了を待つだけ）
+PR(worktree)モード(`<N>` は PR 番号):
 
-### 2. 完了検証
+```bash
+git worktree add tmp/worktrees/pr-<N> --detach
+git fetch origin "pull/<N>/head" "<BASE>"
+git -C tmp/worktrees/pr-<N> checkout --detach FETCH_HEAD
+<skill-dir>/scripts/run-codex-review.sh --cwd "<リポジトリルート絶対パス>/tmp/worktrees/pr-<N>" --base origin/<BASE>
+```
 
-Codex CLI の実行完了後、`ls` で以下のいずれかが存在することを確認する:
+- `git fetch` を 2 ref 同時に行うと `FETCH_HEAD` の先頭は `pull/<N>/head` になるためこの順で指定する。不安なら fetch を 2 回に分け、PR head の fetch を後にする
+- worktree はレビュー完了後(手順 3 の HTML 出力まで終えてから)`git worktree remove --force tmp/worktrees/pr-<N>` で削除する
 
-- PR モード: `tmp/prs/<PR 番号>/review-codex.html`
-- ローカルモード: `tmp/issues/<issue 番号>/review-codex.html`
+注意事項:
 
-ファイルが生成されていない場合は `codex exec` を再実行する（最大 2 回まで）。
+- ネイティブレビューはカスタム指示・追加観点を受け付けない。観点指定が必要な場合は本スキルではなく `/codex:adversarial-review` をユーザーに案内する
+- 認証・セットアップ起因のエラーが出た場合は `/codex:setup` を案内して停止する。それ以外の失敗は 1 回だけ再実行する
 
-### 3. ユーザーへの提示
+### 3. 結果の HTML 整形
 
-生成された `review-codex.html` の内容を要約してユーザーに提示する。
+コマンド stdout(`# Codex Review` 以下の findings)を、`skills/codex-review/assets/template.html` のスタイルに準拠した完結 HTML(`<!DOCTYPE html>` から `</html>` まで)として `<output-dir>/review-codex.html` に書き出す。`mkdir -p` で出力先を作成してから書き込む。
+
+- 指摘の内容・件数は Codex の出力に忠実に整形する(Claude 側で増減・改変しない)。ファイルパス・行番号は Codex 出力のまま残す
+- 重要度マッピング: P0/P1/critical/high → `must`、P2/medium → `should`、P3/low/nit → `nit`(テンプレートの CSS クラスをそのまま利用)
+- 観点タグ(正確性/設計/セキュリティ等)は指摘内容から Claude が付与する
+- 概要セクションには PR/issue のタイトル・URL を記載する。ローカルモードで `<output-dir>/plan.md` や `report.md` があれば、変更意図を 1〜2 文で補足してよい
+
+### 4. 完了検証とユーザーへの提示
+
+`ls` で `<output-dir>/review-codex.html` の存在を確認する。生成されていなければ手順 2 から再実行する(最大 2 回まで)。生成後、指摘の要約(件数と must の内容)をユーザーに提示する。

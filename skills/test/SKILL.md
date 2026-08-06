@@ -49,7 +49,18 @@ chrome-devtools を使って動作確認テストを実行する。
    - 確認に失敗した項目はチェックを入れず、失敗内容を項目要素直下に HTML で追記する(例: `<p class="ng">NG: ボタンクリック後にエラーが表示された</p>`)
 3. 全項目の確認が完了したら、結果サマリーを報告する(呼び出し元が `/dev` の場合、失敗項目の有無が再計画ループの判定に使われる)
 
-### 5. ハマりポイントの記録
+### 5. 前後比較(compare.html)の生成
+
+checklist.html に「UI 撮影台本」セクションが無い場合(UI 変更を伴わない issue)は **このステップ全体を自動スキップ** する。
+
+- Skill ツールで `/capture <issue> after <mode>` を実行し、台本に沿った実装後の UI を `screenshots/after/` に撮影する
+- `screenshots/before/`(`/dev` が実装前に `/capture <issue> before` で撮影)と `screenshots/after/` を撮影名で突き合わせ、`tmp/issues/<issue番号>/screenshots/compare.html` を生成する
+- セルフコンテインドな HTML(CSS/JS インライン)とし、画像は相対パスで参照する。撮影ペアごとにカード表示し、**横並び / スライダー** の表示切替を付ける
+- before のみ存在する画面は `REMOVED`、after のみ存在する画面は `NEW` バッジ付きで単独表示する(エラーにしない)
+- `screenshots/before/` が存在しない場合(実装前の `/capture` がスキップ・未実行だった場合)は after のみのギャラリーとして生成し、冒頭に before が無い旨を明記する
+- 再実行(テスト失敗ループ後)では `after/` と compare.html を再生成する。**`before/` には触れない**(初回実装前のスナップショットのため)
+
+### 6. ハマりポイントの記録
 
 テスト中に発生した問題や予期しない挙動があった場合、`config.json` に記録する。記録する内容:
 

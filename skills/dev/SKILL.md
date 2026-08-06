@@ -23,12 +23,13 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | 1 | research | inline | Skill `/research <issue> <mode>` | research.md/.html | — | — |
 | 2 | plan | inline | Skill `/plan <issue> <mode>` | plan.md/.html, checklist.html | research.md | — |
 | 3 | review-plan | subagent | Agent → `/review-plan <issue>` | review-plan.md/.html | plan.md, checklist.html | — |
-| 4 | implement | inline | Skill `/implement <issue> <mode>` | コード, implementation-notes.md, report.md/.html | plan.md | — |
-| 5 | create-pr-text | subagent | Agent → `/create-pr-text <issue>` | pr.md | plan.md, report.md | A |
-| 6 | test | inline | Skill `/test <issue> <mode>` | checklist.html 更新, screenshots/ | checklist.html, implementation-notes.md | A |
-| 7 | review | inline | Skill `/review <issue>` | review.md/.html | 実装済みコード | — |
-| 8 | quiz | subagent | Agent → `/quiz <issue>` | quiz.html | report.md, review.md | B |
-| 9 | notify-discord | inline | Skill `/notify-discord <サマリ>` | — | — | B |
+| 4 | capture-before | inline | Skill `/capture <issue> before <mode>` | screenshots/before/ | checklist.html | — |
+| 5 | implement | inline | Skill `/implement <issue> <mode>` | コード, implementation-notes.md, report.md/.html | plan.md | — |
+| 6 | create-pr-text | subagent | Agent → `/create-pr-text <issue>` | pr.md | plan.md, report.md | A |
+| 7 | test | inline | Skill `/test <issue> <mode>` | checklist.html 更新, screenshots/after/, compare.html | checklist.html, implementation-notes.md | A |
+| 8 | review | inline | Skill `/review <issue>` | review.md/.html | 実装済みコード | — |
+| 9 | quiz | subagent | Agent → `/quiz <issue>` | quiz.html | report.md, review.md | B |
+| 10 | notify-discord | inline | Skill `/notify-discord <サマリ>` | — | — | B |
 
 - 成果物はすべて `tmp/issues/<issue番号>/` 配下
 - **成果物の 2 種生成(md/.html)**: research / plan / report / review-plan / review は **md(正・スキル間の伝達用)と html(人間レビュー用ビュー)** の 2 種で生成される。スキルは md を読み、無ければ html にフォールバックする。checklist.html は `/test` が結果を書き込む状態ファイルのため html 単一
@@ -36,14 +37,15 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
   - `inline`: Skill ツールで本会話内で実行する。ユーザーとの対話・コード変更・ブラウザ操作を伴うステップ
   - `subagent`: Agent ツール(`general-purpose`)で別コンテキストとして実行する。対話が不要で「成果物を書いて要約を返す」ステップ。メイン会話のコンテキスト消費を抑え、review-plan では **plan 作成の文脈を持たない独立視点** も担保する
 - **並列**: 同じグループ記号のステップは同時に実行する(「並列グループの実行」参照)
+- **capture-before の自動スキップ**: UI 変更を伴わない issue(checklist.html に「UI 撮影台本」セクションが無い等)では、スキル側が撮影せずスキップを報告する。dev はこの報告を受けたらステップをスキップ扱いとして dev-state.json に記録し、次のステップへ進む(ユーザーへの確認は不要)
 
 ## 開始時セットアップ
 
 以下を **1 回の AskUserQuestion にまとめて** 質問する(mode が引数で指定済みならその質問は省く)。このセットアップ質問は mode の「質問しない」制約の**適用対象外**(mode 確定前のセットアップであるため)。
 
 1. **mode**: `auto` / `normal`(推奨: `normal`)
-2. **チェックポイント**(multiSelect): ステップ 1〜8 のうち「完了後に停止して内容を確認したいステップ」を 0 個以上(デフォルト: なし)
-3. **スキップ**(multiSelect): ステップ 1〜9 のうち「実行しないステップ」を 0 個以上(デフォルト: なし)
+2. **チェックポイント**(multiSelect): ステップ 1〜9 のうち「完了後に停止して内容を確認したいステップ」を 0 個以上(デフォルト: なし)
+3. **スキップ**(multiSelect): ステップ 1〜10 のうち「実行しないステップ」を 0 個以上(デフォルト: なし)
 
 ### mode の挙動
 
@@ -135,7 +137,7 @@ dev が実施内容のサマリを組み立てて `/notify-discord <サマリ>` 
 | ループ | 発動条件 | 戻り先 | 上限 |
 |---|---|---|---|
 | review-plan 差し戻し | 修正必須(must)が 1 件以上 | plan(修正)→ review-plan 再実行 | 3 回 |
-| test 失敗 | チェックリストに失敗項目 | plan(更新)→ review-plan → implement → …(表の順に再実行) | test 実行 3 回 |
+| test 失敗 | チェックリストに失敗項目 | plan(更新)→ review-plan → implement → …(表の順に再実行。**capture-before は除く**) | test 実行 3 回 |
 | review 差し戻し | must 指摘が 1 件以上 | implement(指摘の修正)→ review 再実行 | review 実行 3 回 |
 
 - 各ループは**独立にカウント**し、dev-state.json の `loops` に記録する

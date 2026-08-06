@@ -8,13 +8,14 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 
 | スキル | コマンド | 説明 |
 |-------|---------|------|
-| dev | `/dev <issue> [auto\|normal]` | research → plan → review-plan → implement → create-pr-text → test → review → quiz → notify-discord を一気通貫で実行 |
+| dev | `/dev <issue> [auto\|normal]` | research → plan → review-plan → capture (before) → implement → create-pr-text → test → review → quiz → notify-discord を一気通貫で実行 |
 | research | `/research <issue>` | 受け入れ条件・影響範囲・実装方法の候補を整理する（選択は plan に委ねる） |
 | plan | `/plan <issue>` | research の結果をもとに実装方法を選択し、TDD ベースの実装計画と動作確認チェックリストを作成 |
 | review-plan | `/review-plan <issue>` | plan の影響範囲を独立視点で検証し、修正必須/任意改善として差し戻す |
+| capture | `/capture <issue> [before\|after]` | チェックリストの「UI 撮影台本」に沿って UI を撮影し、前後比較用の before / after 素材を保存（UI 変更が無い issue では自動スキップ。side 省略時は実装状況から推定） |
 | implement | `/implement <issue>` | plan に基づいてコードを実装 |
-| create-pr-text | `/create-pr-text <issue>` | Issue と計画から PR タイトル・説明文を作成（PR 自体は作成しない） |
-| test | `/test <issue>` | chrome-devtools でチェックリストに沿ってブラウザ動作確認を実行 |
+| create-pr-text | `/create-pr-text <issue>` | Issue と計画から PR タイトル・説明文を作成（PR 自体は作成しない。UI 変更がある場合は before / after 比較テーブルを含める） |
+| test | `/test <issue>` | chrome-devtools でチェックリストに沿ってブラウザ動作確認を実行し、UI 変更があれば前後比較 (compare.html) を生成 |
 | review | `/review <issue>` | Claude Code と Codex CLI を並列実行してコードレビュー（全観点を網羅）し、結果を統合 |
 | codex-review | `/codex-review` | Codex CLI にコードレビューを依頼（`/review` から内部呼び出しされる。単独実行も可） |
 | quiz | `/quiz [<issue\|PR>] [interactive]` | 変更内容の解説（explainer）と理解確認クイズを生成。空指定なら現在のブランチ差分が対象 |
@@ -53,7 +54,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 - `pr.md` - PR タイトル・説明文（PR 本文用のため md のまま）
 - `review.md` / `.html` - コードレビュー結果
 - `quiz.html` - 変更内容の解説と理解確認クイズ
-- `screenshots/` - `/test` のスクリーンショット
+- `screenshots/` - `/test` のスクリーンショット（UI 変更がある場合は `before/`・`after/` と前後比較ビューア `compare.html` を含む）
 
 主要な成果物は **md（正・スキル間の伝達用）と HTML（人間レビュー用ビュー）の 2 種**で生成されます。HTML は AC カバレッジ表・TDD フェーズの色分け・Mermaid によるフローチャートやアーキテクチャ図など、Markdown では実現困難なリッチ表現で構造を立体的に伝えるためのものです。
 

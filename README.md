@@ -73,7 +73,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 - `/review-plan` で**修正必須**が出た場合は `/plan` → `/review-plan` のサブループを最大 3 回まで回します
 - `/test` でチェックリスト失敗時は `/plan` から再計画するループを最大 3 回まで回します
 - `/review` で **must 指摘**が出た場合は `/implement`（修正）→ `/review` のループを最大 3 回まで回します
-- 再計画で見落としが判明した間接依存・暗黙の必須セットは、`plan` / `review-plan` の config（`~/.agents/.skills-config/<skill>/config.json`。`npx skills update` で消えない場所）の `attentions` に追記され、以降の手戻り防御に転用されます
+- 再計画で見落としが判明した間接依存・暗黙の必須セットは、`plan` / `review-plan` の config（プロジェクトの `.agents/skills-config/<skill>/config.json`。`npx skills update` で消えない場所）の `attentions` に追記され、以降の手戻り防御に転用されます
 
 ## インストール
 

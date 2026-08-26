@@ -20,24 +20,20 @@ Efficient access to the Firebase Emulator Suite. Each rule below exists because 
 
 ## Project config
 
-Keep project-specific knowledge in `~/.agents/.skills-config/firebase-emulator/config.json` (create the file and directories if missing):
+Keep project-specific knowledge in `.agents/skills-config/firebase-emulator/config.json` at the project's git root (create it and its directories if missing):
 
-1. Read that config.json first. If it has an entry for the current project, trust it (ports, project id, region, quirks).
-2. If not, detect from `firebase.json` / `.firebaserc` / `package.json` scripts, then save an entry:
+1. Read that config.json first. If it exists, trust it (ports, project id, region, quirks).
+2. If not, detect from `firebase.json` / `.firebaserc` / `package.json` scripts, then save:
    ```json
    {
-     "projects": {
-       "<repo-name>": {
-         "projectId": "...",
-         "ports": { "firestore": 8080, "auth": 9099, "functions": 5001, "hub": 4400 },
-         "functionsRegion": "us-central1",
-         "startCommand": "firebase emulators:start",
-         "quirks": []
-       }
-     }
+     "projectId": "...",
+     "ports": { "firestore": 8080, "auth": 9099, "functions": 5001, "hub": 4400 },
+     "functionsRegion": "us-central1",
+     "startCommand": "firebase emulators:start",
+     "quirks": []
    }
    ```
-3. When you discover a project-specific pitfall during work (port conflicts, required env vars, seed-data layout), append it to that project's `quirks` so the next session skips the rediscovery.
+3. When you discover a project-specific pitfall during work (port conflicts, required env vars, seed-data layout), append it to `quirks` so the next session skips the rediscovery.
 
 ## Common operations
 

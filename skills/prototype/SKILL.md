@@ -13,7 +13,7 @@ disable-model-invocation: true
 
 ## config.json
 
-このファイルと同じディレクトリの `config.json` に、ユーザーの定番設定を蓄積する（無ければ初回に作成する）。
+`~/.agents/.skills-config/prototype/config.json` に、ユーザーの定番設定を蓄積する（ファイルやディレクトリが無ければ初回に作成する）。
 
 - `prototypes_dir`: プロトタイプ置き場のデフォルト（例: `~/dev/prototypes`）
 - `preferred_stacks`: 過去に選ばれたスタックの傾向（スタック提案時の推奨度に反映する）

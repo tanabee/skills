@@ -167,7 +167,7 @@ review ループを抜けたら、グループ B に進む前に plan.md の「�
 
 ## config への学習機構(手戻りを防御に変換する)
 
-以下のいずれかで、plan が見落としていた**間接依存・暗黙の必須セット・カスケード**が判明した場合、今後の `/plan` と `/review-plan` で防げるよう、両スキルの `config.json` の `attentions` 配列に追記する(完全重複運用)。
+以下のいずれかで、plan が見落としていた**間接依存・暗黙の必須セット・カスケード**が判明した場合、今後の `/plan` と `/review-plan` で防げるよう、`~/.agents/.skills-config/plan/config.json` と `~/.agents/.skills-config/review-plan/config.json` の `projects.<プロジェクト名>.attentions`(プロジェクト名は git root のディレクトリ名。エントリが無ければ作成)に追記する(完全重複運用)。
 
 1. **implement 完了時**: implementation-notes.md の「Deviations」に記録された逸脱(**手戻りが起きる前の一次情報**。最速の学習源として implement 完了ごとに必ず確認する)
 2. **test 失敗時**: 失敗原因の分析結果

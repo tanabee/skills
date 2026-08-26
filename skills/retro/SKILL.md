@@ -10,7 +10,7 @@ allowed-tools: Bash, Read, Glob, Grep, Write, Edit, AskUserQuestion, WebFetch, W
 
 ### 1. 実行履歴 (config.json) の読み込み
 
-このスキルのディレクトリの `config.json` を読む。`runs` 配列の最後の `timestamp` が前回実行時刻で、これが分析範囲の起点になる。ファイルが無い・`runs` が空なら初回実行として直近 7 日を起点にする。
+`~/.agents/.skills-config/retro/config.json` を読む。`projects.<プロジェクト名>`(プロジェクト名は git root のディレクトリ名)の `runs` 配列の最後の `timestamp` が前回実行時刻で、これが分析範囲の起点になる。ファイルやエントリが無い・`runs` が空なら初回実行として直近 7 日を起点にする。
 
 ### 2. スコープの確認
 
@@ -76,7 +76,7 @@ facets の friction (`misunderstood_request` / `wrong_approach` / `buggy_code` /
 
 ### 8. 実行履歴の追記
 
-適用完了後、`config.json` の `runs` 末尾にエントリを追記する。**適用ゼロでも必ず記録する** (次回実行の分析起点になるため)。現在時刻は `date -Iseconds` で取得する。
+適用完了後、上記 config.json の現在プロジェクトの `runs` 末尾(エントリが無ければ作成)にエントリを追記する。**適用ゼロでも必ず記録する** (次回実行の分析起点になるため)。現在時刻は `date -Iseconds` で取得する。
 
 ```json
 {

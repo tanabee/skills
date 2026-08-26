@@ -16,7 +16,7 @@ allowed-tools: Bash, Read, Glob, Grep, Write, Edit
 
 ### 1. プロジェクト固有の注意点を読み込む
 
-このスキルのディレクトリにある `config.json` を読み込み、`attentions` 配列に記載されたプロジェクト固有の注意点を把握する。レビュー時にこれらの注意点が plan に反映されているか照合する。
+`~/.agents/.skills-config/review-plan/config.json` を読み込み、`projects.<プロジェクト名>`(プロジェクト名は git root のディレクトリ名)の `attentions` 配列に記載されたプロジェクト固有の注意点を把握する。ファイルやエントリが無ければ注意点なしとして続行する。レビュー時にこれらの注意点が plan に反映されているか照合する。
 
 ### 2. plan / checklist / research の読み込み
 

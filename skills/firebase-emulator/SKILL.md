@@ -20,9 +20,9 @@ Efficient access to the Firebase Emulator Suite. Each rule below exists because 
 
 ## Project config
 
-Keep project-specific knowledge in `config.json` next to this SKILL.md:
+Keep project-specific knowledge in `~/.agents/.skills-config/firebase-emulator/config.json` (create the file and directories if missing):
 
-1. Read `config.json` first. If it has an entry for the current project, trust it (ports, project id, region, quirks).
+1. Read that config.json first. If it has an entry for the current project, trust it (ports, project id, region, quirks).
 2. If not, detect from `firebase.json` / `.firebaserc` / `package.json` scripts, then save an entry:
    ```json
    {

@@ -135,6 +135,7 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 - 指摘には必ず `ファイルパス:行番号` を含める
 - 指摘ごとに重要度（must / should / nit）を付与
 - 良い点も積極的にコメントする
+- コードベースの検索は Grep ツール、または `git grep` / `rg` を使う（gitignore されたファイルを読まない）。Bash の `grep -r` / `find <dir>` は `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになるため使わない。やむを得ず使う場合は `--exclude='.secret*' --exclude-dir=node_modules` を必ず付ける
 ```
 
 パスは**絶対パス**で渡す（エージェントの CWD が親と一致する保証がないため）。`<review-perspectives>` には本 SKILL.md 冒頭の「レビュー観点」セクションの表を**そのまま転記して**展開する（観点表の定義は 1 箇所に保つため、プロンプト内には重複記載しない）。

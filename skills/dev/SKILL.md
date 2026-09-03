@@ -117,6 +117,7 @@ Agent ツール(`subagent_type: general-purpose`)で起動し、プロンプト�
 - Skill ツールで対象スキルを実行すること(例: `Skill ツールで review-plan を args「123」で実行してください`)
 - リポジトリルートと成果物ディレクトリ(`tmp/issues/<issue番号>/`)の**絶対パス**
 - 「ユーザーへの質問はできない。判断に迷う場合は保守的に倒し、その旨を成果物に明記する」という制約
+- 「検索は Grep ツールまたは `git grep` / `rg` を使い、Bash の `grep -r` / `find <dir>` は使わない(gitignore された `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになる)」という制約
 - 最終メッセージで返すサマリの形式:
   - review-plan: 判定(OK / 差し戻し)、must / should / OK の件数、must の要旨(1 行ずつ)
   - create-pr-text / quiz: 生成した成果物のパスと要点

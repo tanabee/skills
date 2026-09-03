@@ -174,7 +174,7 @@ HTML を採用する理由: 重要度の色分け（must=赤 / should=黄 / nit=
 
 ### 6. ユーザーへの提示
 
-`review.html` のサマリ（各重要度の件数、両者一致の件数、ブロッカー概要、総合判断）をユーザーに提示する。詳細は `review-claude.html` と `review-codex.html` を参照するよう案内する。
+`review.html` のサマリ（各重要度の件数、両者一致の件数、ブロッカー概要、総合判断）をユーザーに提示する。詳細は `review-claude.html` と `review-codex.html` を参照するよう案内する（パスを案内するだけで、ブラウザで開くのは統合結果の `review.html` のみ。`review-claude.html` / `review-codex.html` / `context.html` は開かない）。
 
 `<output-dir>/diff.patch` と `<output-dir>/context.html` は中間成果物として残す（後から再確認や再実行のため）。不要なら手動で削除する。
 

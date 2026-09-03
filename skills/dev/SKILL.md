@@ -107,7 +107,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
    - サブスキル側に fallback があればそれに委ねる
    - fallback が無い場合 — `auto`: 警告を dev-state.json に記録し、続行可能なら続行、不可能ならそのステップもスキップ扱いにする。`normal`: ユーザーに続行可否を確認する
 3. **実行**: 実行形態に従って呼び出す(inline = Skill ツール + mode 引数、subagent = Agent ツール。後述)
-4. **HTML 成果物のオープン**: そのステップが生成・更新した `.html` 成果物すべてを、Skill ツールで `/open <絶対パス>` を呼んで開く。subagent ステップの成果物も完了確認後に dev 側で開く。ループでの再生成・更新時も毎回開き直す
+4. **HTML 成果物のオープン**: そのステップが生成・更新した `.html` のうち、表の「主な成果物」に挙げたものだけを Skill ツールで `/open <絶対パス>` を呼んで開く(review の `review-claude.html` / `review-codex.html` / `context.html` のような中間成果物は開かない)。subagent ステップの成果物も完了確認後に dev 側で開く。ループでの再生成・更新時も毎回開き直す
 5. **チェックポイント判定**: 指定されていれば停止する(「チェックポイント停止の挙動」参照)
 
 ### subagent への依頼形式

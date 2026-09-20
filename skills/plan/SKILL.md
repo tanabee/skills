@@ -10,10 +10,18 @@ GitHub issue ( $ARGUMENTS ) から実装計画と動作確認チェックリス�
 
 ## 引数
 
-`$ARGUMENTS` は `<issue> [mode]` の形式で受け取る。
+`$ARGUMENTS` は `<issue> [mode] [lite]` の形式で受け取る。
 
 - `<issue>`: issue 番号(`123`、`#123`)または URL
 - `[mode]`: `auto` / `normal`。`auto` の場合、本スキル内ではユーザーに質問せず、選択・判断はすべて推奨案で自動決定して、その選択理由と置いた仮定を plan.md に明記する。省略時は `normal` 相当(質問する)
+- `[lite]`: 簡易計画モード。`/dev` が難易度 tier `S`(1〜2 ファイルの定型・局所変更、副作用なし)と判定した issue で使う。research.md を前提とせず、手順を次のように縮める:
+  - step 3: `gh issue view` から AC を直接抽出する(research の fallback と同じ)。AC が曖昧なら通常どおり質問(`auto` は仮定を明記)
+  - step 4: 候補列挙をせず、既存パターンに沿った 1 方式を採用し 1 行で理由を書く
+  - step 5: 書き込み系 API があれば列挙する(無ければ「なし」と明記。**1 件でも見つかったら lite の前提が崩れているので、plan.md 冒頭に「tier 昇格を推奨」と書く**。`/dev` はこれを読んで tier を上げる)
+  - step 6: タスクは 1〜2 個。Red / Green / Refactor の構成は維持する
+  - step 7: DoD は AC 充足・既存テスト pass・lint / type check pass・checklist 全 pass の 4 項目を基本にし、issue 固有の基準があれば足す
+  - step 8: checklist は AC ごとに正常系 1 項目 + 明らかな異常系のみ。UI 変更があれば撮影台本は通常どおり出す
+  - 出力構造(必須セクション)は通常と同じ(後続スキルが同じ形で読めるように)。plan.md 冒頭に `lite` で作成した旨を書く
 
 ## 手順
 

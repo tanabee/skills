@@ -8,15 +8,16 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 
 | スキル | コマンド | 説明 |
 |-------|---------|------|
-| dev | `/dev <issue> [auto\|normal]` | research → plan → review-plan → capture (before) → implement → create-pr-text → test → review → quiz → notify-discord を一気通貫で実行 |
-| research | `/research <issue>` | 受け入れ条件・影響範囲・実装方法の候補を整理する（選択は plan に委ねる） |
-| plan | `/plan <issue>` | research の結果をもとに実装方法を選択し、TDD ベースの実装計画と動作確認チェックリストを作成 |
+| dev | `/dev <issue> [auto\|normal] [S\|M\|L\|XL\|fixed:<model>[/<effort>]\|full]` | triage → research → plan → review-plan → capture (before) → implement → create-pr-text → test → review → quiz → notify-discord を一気通貫で実行。難易度 tier に応じてステップのモデル・スキップを切り替える |
+| triage | `/triage <issue> <initial\|confirm\|promote>` | issue の難易度 tier（S / M / L / XL）を判定。判定は TypeSafe AI（Jev）、不通時は Claude が同じ基準で代行。`/dev` から内部呼び出し |
+| research | `/research <issue> [mode] [tier]` | 受け入れ条件・影響範囲・実装方法の候補を整理する（選択は plan に委ねる） |
+| plan | `/plan <issue> [mode] [lite]` | research の結果をもとに実装方法を選択し、TDD ベースの実装計画と動作確認チェックリストを作成（`lite` は S tier 向けの簡易計画） |
 | review-plan | `/review-plan <issue>` | plan の影響範囲を独立視点で検証し、修正必須/任意改善として差し戻す |
 | capture | `/capture <issue> [before\|after]` | チェックリストの「UI 撮影台本」に沿って UI を撮影し、前後比較用の before / after 素材を保存（UI 変更が無い issue では自動スキップ。side 省略時は実装状況から推定） |
 | implement | `/implement <issue>` | plan に基づいてコードを実装 |
 | create-pr-text | `/create-pr-text <issue>` | Issue と計画から PR タイトル・説明文を作成（PR 自体は作成しない。UI 変更がある場合は before / after 比較テーブルを含める） |
 | test | `/test <issue>` | chrome-devtools でチェックリストに沿ってブラウザ動作確認を実行し、UI 変更があれば前後比較 (compare.html) を生成 |
-| review | `/review <issue>` | Claude Code と Codex CLI を並列実行してコードレビュー（全観点を網羅）し、結果を統合 |
+| review | `/review <issue> [tier]` | Claude Code と Codex CLI を並列実行してコードレビュー（全観点を網羅）し、結果を統合 |
 | codex-review | `/codex-review` | Codex CLI にコードレビューを依頼（`/review` から内部呼び出しされる。単独実行も可） |
 | quiz | `/quiz [<issue\|PR>] [interactive]` | 変更内容の解説（explainer）と理解確認クイズを生成。空指定なら現在のブランチ差分が対象 |
 | pr-comment | `/pr-comment <コメントURL>` | PR レビューコメントの妥当性をコードベースで独立検証し、判定（must/should/nit）と返信文案を作成（返信の投稿は行わない） |
@@ -68,11 +69,21 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | `normal` | plan の方針選択と config 追記の承認のみ質問 |
 
 - **開始時に「どのステップ完了後に停止してユーザーがレビューするか」を選択できます**（mode に関わらず適用。`implement` 完了後だけ止めて確認、などが可能）
-- **開始時に「スキップするステップ」も選択できます**（例: PR を作らない場合は `create-pr-text` をスキップ、ローカル確認のみなら `notify-discord` をスキップ）
+- **スキップするステップは難易度 tier から自動で決まります**（個別選択は廃止）。tier は省略時に `/triage` が判定（セットアップ直後に仮判定 → research 後に確定 → plan 後に昇格のみ）し、引数で固定もできます
+
+| tier | 内容 | 主な違い |
+| --- | --- | --- |
+| `S` | 1〜2 ファイルの定型・局所変更 | research / review-plan / capture / quiz をスキップ。plan は `lite` |
+| `M` | 既存パターンに沿った 1 機能 | 全ステップ。副作用 identifier が無ければ review-plan を自動スキップ |
+| `L` / `XL` | 横断・副作用あり / 設計判断・要件曖昧 | 全ステップ。レビュアーを Fable に |
+| `fixed:<model>[/<effort>]` | 判定なし・スキップなし | 全ステップを指定した model / effort で実行。`full` = `fixed:fable/xhigh` |
+
+- **モデルの使い分け**: 判断が後段にカスケードするステップ（research 本体・plan・implement・L 以上のレビュアー）は Fable、それ以外（capture / test / create-pr-text / review 統合 / quiz / notify-discord など）は Opus の subagent で実行して Fable の消費を抑えます。inline で動くステップの effort はセッション設定に従うため、tier 確定時に推奨の `/effort` を提示します
 - **作業開始前に `issue-<issue番号>` ブランチに切り替えます**（無ければベースブランチから自動作成。未コミットの変更がある場合は中断してユーザーに対処を促します）
 - `/review-plan` で**修正必須**が出た場合は `/plan` → `/review-plan` のサブループを最大 3 回まで回します
-- `/test` でチェックリスト失敗時は `/plan` から再計画するループを最大 3 回まで回します
-- `/review` で **must 指摘**が出た場合は `/implement`（修正）→ `/review` のループを最大 3 回まで回します
+- `/test` でチェックリスト失敗時は `/plan` から再計画するループを最大 3 回まで回します（S は 1 回）
+- `/review` で **must 指摘**が出た場合は `/implement`（修正）→ `/review` のループを最大 3 回まで回します（S は 2 回）
+- S で上限に達した場合は tier 判定の誤りとみなして M に昇格し、残りを M として続行します
 - 再計画で見落としが判明した間接依存・暗黙の必須セットは、`plan` / `review-plan` の config（プロジェクトの `.agents/skills-config/<skill>/config.json`。`npx skills update` で消えない場所）の `attentions` に追記され、以降の手戻り防御に転用されます
 
 ## インストール

@@ -1,0 +1,65 @@
+{
+  "_comment": "Tier triage questions and thresholds for /triage. Questions are in English (Jev accuracy). State may contain Japanese. Thresholds are initial values: calibrate against real triage.json history (source: jev vs user overrides).",
+  "model": "jev-latest",
+  "questions": {
+    "is_local_change": {
+      "type": "noul",
+      "instructions": "Can this change be completed by editing at most two files while following an existing pattern in the codebase, with acceptance criteria that are already explicit and testable?",
+      "criteria": {
+        "true": "A typo, label, copy, style, config value, or a single field added to an existing structure; the issue text and signals show a small, well-understood edit",
+        "false": "New logic, several files, a new screen or flow, or anything whose scope is not obvious from the issue"
+      }
+    },
+    "touches_side_effects": {
+      "type": "noul",
+      "instructions": "Does the change write to a datastore collection or table, publish an event or message, enqueue a job, call an external service, or change a config key or feature flag that other code reads?",
+      "criteria": {
+        "true": "The issue or signals mention writes, triggers, subscribers, jobs, notifications, external APIs, or config keys; or side-effect identifiers were found",
+        "false": "Read-only or purely presentational change with no write path and no identifiers found"
+      }
+    },
+    "requires_design_choice": {
+      "type": "noul",
+      "instructions": "Are there materially different implementation approaches for this issue whose choice would change the architecture, data model, or module boundaries?",
+      "criteria": {
+        "true": "Multiple candidate approaches with close recommendation scores, a new subsystem or integration, or a change in how data is stored or flows",
+        "false": "One obvious approach following existing patterns; candidates differ only in minor details"
+      }
+    },
+    "ac_is_ambiguous": {
+      "type": "noul",
+      "instructions": "Are the acceptance criteria missing, or too vague to test without asking the issue author?",
+      "criteria": {
+        "true": "No acceptance criteria, or several unverified assumptions had to be recorded, or the expected behavior for main cases is not stated",
+        "false": "Acceptance criteria are listed and each can be verified by a concrete check"
+      }
+    },
+    "has_ui_change": {
+      "type": "noul",
+      "instructions": "Does the change alter anything a user can see or interact with in the UI?",
+      "criteria": {
+        "true": "Screens, components, copy, layout, or interactions change",
+        "false": "Backend, data, infrastructure, or tooling only"
+      }
+    }
+  },
+  "thresholds": {
+    "_comment": "Evaluated top-down; first match wins. Values are Noul probabilities (0-1).",
+    "XL": "requires_design_choice >= 0.7 || ac_is_ambiguous >= 0.7",
+    "L": "touches_side_effects >= 0.6",
+    "S": "is_local_change >= 0.8 && touches_side_effects < 0.3 && requires_design_choice < 0.3",
+    "default": "M"
+  },
+  "promote": {
+    "_comment": "Rule-based (no Jev). Applied at stage=promote using plan.md. Only ever raises the tier by one level.",
+    "side_effect_identifiers_min_for_L": 1,
+    "tasks_min_for_L": 5,
+    "side_effect_identifiers_min_for_XL": 3
+  },
+  "fallback": {
+    "_comment": "When Jev is unavailable, the triage runner (Opus, effort medium) answers the same questions with a probability 0-1 each, in JSON, using only the same state. Same thresholds apply.",
+    "model": "opus",
+    "effort": "medium",
+    "timeout_seconds": 10
+  }
+}

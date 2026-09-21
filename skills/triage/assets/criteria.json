@@ -1,5 +1,5 @@
 {
-  "_comment": "Tier triage questions and thresholds for /triage. Questions are in English (Jev accuracy). State may contain Japanese. Thresholds are initial values: calibrate against real triage.json history (source: jev vs user overrides).",
+  "_comment": "Tier triage questions and thresholds for /triage. Questions are in English (Jev accuracy is best in English; CJK is accepted but less accurate per https://docs.typesafe.ai/models). State may contain Japanese, but the runner prepends an English summary (summary_en) at stage=initial. Thresholds are initial values: calibrate against real triage.json history (source: jev vs user overrides).",
   "model": "jev-latest",
   "questions": {
     "is_local_change": {
@@ -44,11 +44,21 @@
     }
   },
   "thresholds": {
-    "_comment": "Evaluated top-down; first match wins. Values are Noul probabilities (0-1).",
+    "_comment": "Evaluated top-down; first match wins. Values are Noul probabilities (0-1). A match is rejected (falls through) when any criterion the matched rule references has a score inside uncertain_band; the result is then default with uncertain=true.",
+    "uncertain_band": [
+      0.4,
+      0.6
+    ],
     "XL": "requires_design_choice >= 0.7 || ac_is_ambiguous >= 0.7",
     "L": "touches_side_effects >= 0.6",
     "S": "is_local_change >= 0.8 && touches_side_effects < 0.3 && requires_design_choice < 0.3",
-    "default": "M"
+    "default": "M",
+    "stage_overrides": {
+      "_comment": "At stage=initial the state is issue text (often Japanese) plus a light grep, so S is held to a stricter bar: skipping research on a misjudged S is the costliest error.",
+      "initial": {
+        "S": "is_local_change >= 0.85 && touches_side_effects < 0.2 && requires_design_choice < 0.2 && ac_is_ambiguous < 0.3"
+      }
+    }
   },
   "promote": {
     "_comment": "Rule-based (no Jev). Applied at stage=promote using plan.md. Only ever raises the tier by one level.",
@@ -61,5 +71,14 @@
     "model": "opus",
     "effort": "medium",
     "timeout_seconds": 10
+  },
+  "state_preparation": {
+    "_comment": "Applied by the triage runner before calling Jev or the fallback.",
+    "initial": {
+      "summary_en": "The runner writes a 3-5 sentence English summary of the issue containing only facts (what changes, where, for whom, any named files/collections/screens, whether acceptance criteria are stated). No opinions, no tier guess. Placed as the first field of state; the original title/body/labels follow unchanged so identifiers stay searchable."
+    },
+    "confirm": {
+      "note": "State is numeric signals from research.md; language has little effect. No summary needed."
+    }
   }
 }

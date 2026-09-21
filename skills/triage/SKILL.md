@@ -31,8 +31,9 @@ GitHub issue ( $ARGUMENTS ) の難易度 tier を判定し、`tmp/issues/<issue�
 
 - `initial`:
   - `gh issue view <issue> --json title,body,labels` で title / body / labels
+  - **英語要約(`summary_en`)を作る**: Jev は英語が主要な訓練言語で、日本語を含む CJK は「受け付けるが精度が落ちる」と公式に明記されている([models](https://docs.typesafe.ai/models)、[state](https://docs.typesafe.ai/concepts/state))。そのため issue の title / body を **事実だけの英語 3〜5 文**に要約し、state の先頭に置く(何を・どこを・誰向けに変えるか、名前の出ているファイル / コレクション / 画面、AC が書かれているか)。意見や tier の推測は書かない。原文の title / body / labels もそのまま後ろに残す(識別子の照合に使う)
   - 軽量 grep: issue 本文中の識別子らしい語(関数名・パス・コレクション名・画面名)を `git grep -l` で引き、ヒットしたファイル数と、書き込み系 API(`.set(` `.update(` `publish(` `emit(` `enqueue(` 等)を含むファイル数を数える。深追いしない(数十秒で終える)
-  - state: `{ "title", "body", "labels", "grep": { "files_hit", "files_with_writes" } }`
+  - state: `{ "summary_en", "title", "body", "labels", "grep": { "files_hit", "files_with_writes" } }`
 - `confirm`:
   - `tmp/issues/<issue>/research.md` の `## 難易度シグナル` セクションを読み、数値を state にする
   - state: `{ "changed_files", "side_effect_identifiers", "top_candidate_gap", "unverified_assumptions", "high_impact_blind_spots", "ui_change", "ac_count" }`(research.md にある項目だけ)
@@ -47,15 +48,16 @@ GitHub issue ( $ARGUMENTS ) の難易度 tier を判定し、`tmp/issues/<issue�
 
 1. `TYPESAFE_API_KEY` を確認する。無ければ手順 3 の fallback へ
 2. criteria.json の `questions` をそのまま `questions` に、手順 1 の state を `state` に入れて `POST https://api.typesafe.ai/v1/systemone` を curl で叩く(`Authorization: Bearer $TYPESAFE_API_KEY`、`model` は criteria.json の値、`--max-time` は `fallback.timeout_seconds`)
-3. 応答の `answers.<id>.noul`(0〜1)を各 criterion のスコアとし、`thresholds` を上から評価して最初に一致した tier を採用(どれも一致しなければ `default`)
-4. `source: "jev"`
+3. 応答の `answers.<id>.noul`(0〜1)を各 criterion のスコアとし、`thresholds` を上から評価して最初に一致した tier を採用(どれも一致しなければ `default`)。stage が `initial` のときは `thresholds.stage_overrides.initial` の式を優先する(S の基準が厳しい)
+4. **不確実帯のガード**: 一致した規則が参照する criterion のいずれかのスコアが `uncertain_band`(初期値 0.4〜0.6)に入っていたら、その一致は採用せず `default`(M)に倒し、`uncertain: true` を記録する。日本語 state での精度低下を安全側に吸収するための規則で、Noul には confidence が無いため 0.5 付近を「迷い」とみなす
+5. `source: "jev"`
 
 **fallback(Claude が代行)**
 
 API キー無し / 非 2xx / タイムアウト / 応答の JSON 不正のとき:
 
-1. criteria.json の各 question の `instructions` と `criteria` を読み、**同じ state だけ**を見て、各 criterion の「yes の確率」を 0〜1 で決める。推論を長引かせず、基準に照らして機械的に付ける
-2. 同じ `thresholds` で tier を決める
+1. criteria.json の各 question の `instructions` と `criteria` を読み、**同じ state だけ**(`summary_en` を含む)を見て、各 criterion の「yes の確率」を 0〜1 で決める。推論を長引かせず、基準に照らして機械的に付ける
+2. 同じ `thresholds`(stage_overrides と不確実帯のガードを含む)で tier を決める
 3. `source: "claude-fallback"`、`fallback_reason` に理由(`no_api_key` / `http_<status>` / `timeout` / `bad_json`)を記録する
 
 fallback も失敗した場合(state が集められない等)は tier を `M`、`source: "default"` とする。
@@ -80,6 +82,7 @@ criteria.json の `promote` を適用する。現在 tier より 1 段階だけ�
   "previous_tier": "M",
   "source": "jev",
   "scores": { "is_local_change": 0.12, "touches_side_effects": 0.81, "requires_design_choice": 0.34, "ac_is_ambiguous": 0.2, "has_ui_change": 0.9 },
+  "uncertain": false,
   "state": { "...": "判定に使った state をそのまま" },
   "criteria_file": "skills/triage/assets/criteria.json",
   "timestamp": "2026-09-20T04:00:00Z",
@@ -89,13 +92,14 @@ criteria.json の `promote` を適用する。現在 tier より 1 段階だけ�
 
 最終メッセージ(subagent のときはこれが返り値)は次の 3 行:
 
-- `tier: <S|M|L|XL>`(promote で変化なしなら `tier: <同じ値>(変更なし)`)
+- `tier: <S|M|L|XL>`(promote で変化なしなら `tier: <同じ値>(変更なし)`。不確実帯で M に倒した場合は `tier: M(不確実)`)
 - `source: <jev|claude-fallback|rule|default>`(fallback のときは理由も)
 - 決め手になった criterion とスコア(1 行)
 
 ## 注意事項
 
 - 検索は Grep ツールまたは `git grep` / `rg` を使う。Bash の `grep -r` / `find <dir>` は使わない(gitignore された deny ルール対象ファイルを走査して承認待ちになる)
-- state には判定に必要な情報だけを入れる(無関係な情報は精度を下げる)。issue 本文が長い場合も切り詰めず、そのまま渡す
+- state には判定に必要な情報だけを入れる(無関係な情報は精度を下げる)。issue 本文が長い場合も切り詰めず、そのまま渡す(`summary_en` はその要約であって置き換えではない)
+- 質問文(criteria.json)は英語のまま保つ。日本語化しない
 - criteria.json の質問文と閾値を本スキル内に複製しない(定義は 1 箇所)
 - `TYPESAFE_API_KEY` の値をログや成果物に書かない

@@ -12,6 +12,7 @@ GitHub issue ( $ARGUMENTS ) の内容をもとに実装を行う。
 
 - `<issue>`: issue 番号(`123`、`#123`)または URL。空の場合はユーザーに issue 番号を質問する
 - `[mode]`: `auto` / `normal`。`auto` の場合、実装中に要件が不明確でもユーザーに質問せず、**保守的な選択肢を選んで implementation-notes.md に記録して続行する**。省略時は質問してよい
+- **subagent として実行され AskUserQuestion が使えない場合**(`/dev` から起動されたとき): `normal` でも直接は質問できない。質問は呼び出し元の指示どおり `tmp/issues/<issue番号>/questions.json`(AskUserQuestion と同じ構造: `question` / `header` / `multiSelect` / `options[]`)に書き、最終メッセージを `status: needs-input` として一旦終了する。回答(`answers`)が渡されたら文脈を保ったまま続きから進める
 
 ## implementation-notes.md(実装ノート)
 

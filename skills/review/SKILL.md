@@ -10,7 +10,7 @@ Claude Code と Codex CLI で並列にコードレビューを行い、結果を
 
 ## 引数
 
-`$ARGUMENTS` は `<対象> [tier]` の形式。`<対象>` は PR 番号/URL または issue 番号/URL（省略可）。`123`、`#123`、PR URL、issue URL のいずれか。`[tier]` は `/dev` から渡される難易度（`S` / `M` / `L` / `XL` / `fixed:<model>[/<effort>]`）で、Claude Code レビュアー Agent の model を決めるためだけに使う（手順 4-A 参照）。
+`$ARGUMENTS` は `<対象> [tier]` の形式。`<対象>` は PR 番号/URL または issue 番号/URL（省略可）。`123`、`#123`、PR URL、issue URL のいずれか。`[tier]` は `/dev` から渡される難易度（`S` / `M` / `L` / `XL` / `fixed:<model>[/<effort>]`）で、Claude Code レビュアー Agent の model / effort と観点の範囲を決めるためだけに使う（手順 4-A 参照）。
 
 数値（`123`、`#123`）が渡された場合は、まず `gh pr view <番号>` を試みて PR が存在すれば PR モード、存在しなければ issue 番号として扱いローカルモードに入る。URL の場合は `/pull/` を含めば PR、`/issues/` を含めば issue として判定する。
 
@@ -93,9 +93,9 @@ PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.
 
 **1 メッセージ内で 2 つのレビューを並列発行する**（逐次実行しない）。
 
-#### 4-A. Claude Code レビュー（Agent ツールで `general-purpose` を起動）
+#### 4-A. Claude Code レビュー（Agent ツールで `dev-effort-<effort>` を起動）
 
-`subagent_type = general-purpose` で Agent を 1 つ起動する。`model` は tier で決める: `S` / `M` → `opus`、`L` / `XL` → `fable`、`fixed:<model>` → その model、tier 省略時 → `fable`（must 指摘の精度がループ回数に直結するため、指定が無ければ高い方に倒す）。プロンプトは以下:
+Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opus/medium`、`M` → `opus/high`、`L` / `XL` → `fable/xhigh`、`fixed:<model>[/<effort>]` → その値、tier 省略時 → `fable/xhigh`（must 指摘の精度がループ回数に直結するため、指定が無ければ高い方に倒す）。`subagent_type` は `dev-effort-<effort>`（`/dev` が `~/.claude/agents/` に置く定義。無い・effort 省略時は `general-purpose`）、`model` 引数に model を渡す。**`S` では観点を「正確性」「副作用 / 影響範囲」の 2 つに絞る**（`<review-perspectives>` にその 2 行だけ転記し、プロンプトの「全観点」を「この 2 観点」に読み替える）。プロンプトは以下:
 
 ```
 あなたはコードレビュアーです。以下の入力ファイルを Read してから、全観点を網羅したレビューを実施し、結果を output-path に HTML で Write してください。

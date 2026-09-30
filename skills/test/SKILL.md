@@ -12,6 +12,7 @@ chrome-devtools を使って動作確認テストを実行する。
 
 - `<issue>`: issue 番号(`123`、`#123`)または URL。空の場合はユーザーに issue 番号を質問する
 - `[mode]`: `auto` / `normal`。`auto` の場合はユーザーに質問しない(fallback 時の挙動は手順 2 参照)。省略時は質問してよい
+- **subagent として実行され AskUserQuestion が使えない場合**(`/dev` から起動されたとき): `normal` でも直接は質問できない。質問は呼び出し元の指示どおり `tmp/issues/<issue番号>/questions.json`(AskUserQuestion と同じ構造: `question` / `header` / `multiSelect` / `options[]`)に書き、最終メッセージを `status: needs-input` として一旦終了する。回答(`answers`)が渡されたら文脈を保ったまま続きから進める
 
 ## 前提条件
 

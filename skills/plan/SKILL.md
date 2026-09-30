@@ -14,6 +14,7 @@ GitHub issue ( $ARGUMENTS ) から実装計画と動作確認チェックリス�
 
 - `<issue>`: issue 番号(`123`、`#123`)または URL
 - `[mode]`: `auto` / `normal`。`auto` の場合、本スキル内ではユーザーに質問せず、選択・判断はすべて推奨案で自動決定して、その選択理由と置いた仮定を plan.md に明記する。省略時は `normal` 相当(質問する)
+- **subagent として実行され AskUserQuestion が使えない場合**(`/dev` から起動されたとき): `normal` でも直接は質問できない。質問は呼び出し元の指示どおり `tmp/issues/<issue番号>/questions.json`(AskUserQuestion と同じ構造: `question` / `header` / `multiSelect` / `options[]`)に書き、最終メッセージを `status: needs-input` として一旦終了する。回答(`answers`)が渡されたら文脈を保ったまま続きから進める
 - `[lite]`: 簡易計画モード。`/dev` が難易度 tier `S`(1〜2 ファイルの定型・局所変更、副作用なし)と判定した issue で使う。research.md を前提とせず、手順を次のように縮める:
   - step 3: `gh issue view` から AC を直接抽出する(research の fallback と同じ)。AC が曖昧なら通常どおり質問(`auto` は仮定を明記)
   - step 4: 候補列挙をせず、既存パターンに沿った 1 方式を採用し 1 行で理由を書く

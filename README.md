@@ -75,10 +75,12 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | --- | --- | --- |
 | `S` | 1〜2 ファイルの定型・局所変更 | research / review-plan / capture / quiz をスキップ。plan は `lite` |
 | `M` | 既存パターンに沿った 1 機能 | 全ステップ。副作用 identifier が無ければ review-plan を自動スキップ |
-| `L` / `XL` | 横断・副作用あり / 設計判断・要件曖昧 | 全ステップ。レビュアーを Fable に |
+| `L` / `XL` | 横断・副作用あり / 設計判断・要件曖昧 | 全ステップ。research / plan / implement / レビュアーを Fable xhigh に（XL の plan は max） |
 | `fixed:<model>[/<effort>]` | 判定なし・スキップなし | 全ステップを指定した model / effort で実行。`full` = `fixed:fable/xhigh` |
 
-- **モデルの使い分け**: 判断が後段にカスケードするステップ（research 本体・plan・implement・L 以上のレビュアー）は Fable、それ以外（capture / test / create-pr-text / review 統合 / quiz / notify-discord など）は Opus の subagent で実行して Fable の消費を抑えます。inline で動くステップの effort はセッション設定に従うため、tier 確定時に推奨の `/effort` を提示します
+- **モデルの使い分け**: 全ステップを subagent で実行し、tier × ステップごとに model と effort を `/dev` の実行形態表で決めます。判断が後段にカスケードするステップ（research 本体・plan・implement・L 以上のレビュアー）だけ Fable、それ以外（capture / test / create-pr-text / review 統合 / quiz / notify-discord など）は Opus に落として Fable の消費を抑えます。S は全ステップ Opus です
+- **effort の固定**: Agent ツールは effort を渡せないため、`/dev` が `skills/dev/assets/agents/dev-effort-{low,medium,high,xhigh,max}.md` を `~/.claude/agents/` に配置し（初回セットアップ時に自動コピー）、`subagent_type: dev-effort-<effort>` + `model` 引数でステップを起動します。セッションの `/model` `/effort` はオーケストレーション（dev 本体）にしか影響しません
+- **normal モードの質問**: subagent は直接ユーザーに質問できないため、サブスキルは質問を `questions.json` に書いて一旦停止し、`/dev` が AskUserQuestion で代行して回答を戻し、同じ subagent を文脈を保ったまま再開します（質問リレー）
 - **作業開始前に `issue-<issue番号>` ブランチに切り替えます**（無ければベースブランチから自動作成。未コミットの変更がある場合は中断してユーザーに対処を促します）
 - `/review-plan` で**修正必須**が出た場合は `/plan` → `/review-plan` のサブループを最大 3 回まで回します
 - `/test` でチェックリスト失敗時は `/plan` から再計画するループを最大 3 回まで回します（S は 1 回）

@@ -1,7 +1,7 @@
 ---
 name: dev
 description: GitHub issue から計画・実装・テスト・レビュー・PR テキスト・理解確認まで一気通貫で行う。難易度 tier に応じてステップのモデル・effort・スキップを切り替える。
-allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Agent, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
+allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Agent, SendMessage, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 disable-model-invocation: true
 ---
 
@@ -42,30 +42,42 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 ### 実行形態表(tier × ステップ)
 
-値は `inline`(Skill ツールで本会話内で実行。セッションモデルで動く)/ `agent:<model>`(Agent ツールで別コンテキストとして実行し、その model を渡す)/ `skip`。
+値は `agent:<model>/<effort>`(Agent ツールで別コンテキストとして実行。`subagent_type` は `dev-effort-<effort>`、`model` 引数に `<model>`)/ `skip`。**ステップはすべて agent で動かし、inline(セッションモデル)で動くのは dev 本体だけ**。セッションの model / effort はステップの実行に影響しないので、人が `/model` `/effort` を切り替える必要はない。
 
-| ステップ | S | M | L | XL | fixed:\<model\> |
+| ステップ | S | M | L | XL | fixed:\<model\>/\<effort\> |
 |---|---|---|---|---|---|
-| triage-initial | agent:opus(tier 引数指定時は skip) | ← | ← | ← | skip |
-| research | skip | inline | inline | inline | inline |
-| triage-confirm | skip | agent:opus | agent:opus | agent:opus | skip |
-| plan | inline(lite) | inline | inline | inline | inline |
-| triage-promote | skip | agent:opus | agent:opus | agent:opus | skip |
-| review-plan | skip | agent:opus ※1 | agent:opus | agent:fable | agent:\<model\> |
-| capture-before | skip | agent:opus | agent:opus | agent:opus | agent:\<model\> |
-| implement | inline | inline | inline | inline | inline |
-| create-pr-text | agent:opus | agent:opus | agent:opus | agent:opus | agent:\<model\> |
-| test | agent:opus ※2 | agent:opus ※2 | agent:opus ※2 | agent:opus ※2 | ※2 |
-| review | agent:opus | agent:opus | agent:opus | agent:opus | agent:\<model\> |
-| quiz | skip | agent:opus | agent:opus | agent:opus | agent:\<model\> |
-| notify-discord | agent:opus | agent:opus | agent:opus | agent:opus | agent:\<model\> |
+| triage-initial | agent:opus/medium(tier 引数指定時は skip) | ← | ← | ← | skip |
+| research | skip | agent:opus/high | agent:fable/high | agent:fable/xhigh | agent:\<model\>/\<effort\> |
+| └ ファンアウト Agent(research 内) | — | opus/low | opus/medium | opus/medium | \<model\>/\<effort\> |
+| triage-confirm | skip | agent:opus/medium | agent:opus/medium | agent:opus/medium | skip |
+| plan | agent:opus/medium(lite) | agent:fable/high | agent:fable/xhigh | agent:fable/max | agent:\<model\>/\<effort\> |
+| triage-promote | skip | agent:opus/medium | agent:opus/medium | agent:opus/medium | skip |
+| review-plan | skip | agent:opus/high ※1 | agent:opus/xhigh | agent:fable/xhigh | agent:\<model\>/\<effort\> |
+| capture-before | skip | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
+| implement | agent:opus/medium | agent:fable/high | agent:fable/xhigh | agent:fable/xhigh | agent:\<model\>/\<effort\> |
+| create-pr-text | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/medium | agent:\<model\>/\<effort\> |
+| test | agent:opus/low ※2 | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
+| review(親: 収集・統合) | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
+| └ Claude レビュアー Agent(review 内) | opus/medium(正確性・副作用のみ) | opus/high | fable/xhigh | fable/xhigh | \<model\>/\<effort\> |
+| quiz | skip | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
+| notify-discord | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
+| dev 本体(状態管理・DoD ゲート・config 学習) | inline(セッションモデル) | ← | ← | ← | inline |
 
-- triage-initial は tier が未確定の時点で実行するため、tier 引数が無い限り常に agent:opus
+- triage-initial は tier が未確定の時点で実行するため、tier 引数が無い限り常に agent:opus/medium
 - ※1 M の review-plan は、plan.md の「副作用 identifier」セクションが空 **かつ** `.agents/skills-config/review-plan/config.json` の `attentions` に plan の変更対象へ該当する項目が無い場合、dev が自動スキップしてよい(dev-state.json に理由を記録)
-- ※2 test は `mode=auto` のとき agent(subagent は質問できないため、質問しない auto だけ切り出せる)。`mode=normal` では inline(アプリ起動依頼・checklist 無し fallback で質問が発生しうる)。fixed では auto なら agent:\<model\>、normal なら inline
-- **inline ステップのモデルと effort はセッション設定に従う**(Claude 側からは変更できない)。tier 確定時に次の推奨値を提示する: S → `/model opus` + `/effort medium`(任意)/ M → `/effort high` / L・XL → `/effort xhigh` / fixed → `/model <model>` + `/effort <effort>`。人が設定した前提で進め、案内した値を dev-state.json に記録する
-- review 内の Claude レビュアー Agent の model は review スキルが tier 引数から決める(S/M: opus、L/XL: fable、fixed: \<model\>)。research 内のファンアウト Agent は research スキルが tier 引数から決める(既定 opus、fixed: \<model\>)
-- 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・implement・L 以上のレビュアー)だけ Fable(セッションモデル)に残し、作業・診断寄りのステップは Opus の subagent に落とす**。Sonnet / Haiku は精度リスクを取ってまで使わず、安くしたければ Opus の effort を下げる
+- ※2 S の test は checklist の内容に従う(UI 変更が無ければ unit テスト項目だけになり、ブラウザ操作は発生しない)
+- 「└」の行はサブスキル内部で起動する Agent。research / review が tier 引数から model / effort を決める(subagent_type は同じ `dev-effort-<effort>`)
+- `fixed:<model>` で effort が省略された場合は `subagent_type: general-purpose` + `model` で起動し、effort はセッション値を継承する
+- normal モードで質問が発生しうるステップ(research / plan / implement / test)は「質問リレー」で扱う(後述)。subagent 化のために auto に落とすことはしない
+- 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・implement・L 以上のレビュアー)だけ Fable に残し、作業・診断寄りのステップは Opus に落とす**。Sonnet / Haiku は精度リスクを取ってまで使わず、安くしたければ Opus の effort を下げる
+
+### エージェント定義の準備(effort を効かせる)
+
+Agent ツールは `model` を呼び出し時に渡せるが effort は渡せない。effort は subagent 定義(`~/.claude/agents/*.md`)の frontmatter でだけ固定できるため、本スキルの `assets/agents/` にある `dev-effort-{low,medium,high,xhigh,max}.md`(`model: inherit` + `effort` 固定)を使う。セットアップ時に次を行う:
+
+1. `~/.claude/agents/dev-effort-*.md` の 5 ファイルが存在し、`assets/agents/` と内容が一致するか `diff -q` で確認する。無い・違うものは `assets/agents/` からコピーする(`mkdir -p ~/.claude/agents`)。追加・更新は数秒で自動反映される(再起動不要)
+2. ただし `~/.claude/agents/` を今回新規作成した場合(そのスコープで初のエージェント定義)は Claude Code の再起動まで定義が読まれない。その旨をユーザーに伝え、今回の run は次の fallback で進める
+3. fallback: `dev-effort-<effort>` を Agent ツールが受け付けない場合は `subagent_type: general-purpose` + `model` で起動する(effort はセッション値を継承)。dev-state.json に `effort_enforced: false` を記録する
 
 ## 開始時セットアップ
 
@@ -76,13 +88,15 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 スキップするステップは tier から決まるため、個別に質問しない。特定ステップを飛ばしたい場合は tier 引数で調整する(例: research を飛ばすなら `S`)。
 
+セットアップ質問の直後に「エージェント定義の準備」(前述)を行い、`effort_enforced` を dev-state.json に記録する。
+
 ## tier の確定と反映
 
 1. tier 引数が指定されていればそれを採用し、`tier_source: "user"` とする。triage は呼ばない
 2. 指定が無ければ、セットアップ直後に `triage-initial` を実行して仮 tier を得る(S の見極めが目的。迷えば M になる)
-3. research 完了後に `triage-confirm` で確定する。**以降のステップの実行形態・スキップ・推奨 effort はこの結果で決める**
+3. research 完了後に `triage-confirm` で確定する。**以降のステップの model / effort・スキップはこの結果で決める**
 4. plan 完了後に `triage-promote` を実行し、昇格があれば以降に反映する(降格はしない)
-5. tier が確定・変化するたびに dev-state.json の `tier` / `tier_source` を更新し、`normal` モードでは確定時に 1 回だけ「tier と推奨 `/effort`」を提示して続行可否を確認する(`auto` は提示のみで続行)。triage が `source: default`(Jev も fallback も失敗)を返した場合は mode に関わらず確認する
+5. tier が確定・変化するたびに dev-state.json の `tier` / `tier_source` を更新し、`normal` モードでは確定時に 1 回だけ「tier と各ステップの model / effort(実行形態表の該当列)」を提示して続行可否を確認する(`auto` は提示のみで続行)。triage が `source: default`(Jev も fallback も失敗)を返した場合は mode に関わらず確認する
 
 ## 状態の永続化(dev-state.json)
 
@@ -97,7 +111,9 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
   "fixed": null,
   "checkpoints": ["plan", "review"],
   "skips": ["quiz"],
-  "effort_advised": "high",
+  "effort_enforced": true,
+  "models": { "triage-initial": "opus/medium", "research": "opus/high", "plan": "fable/high" },
+  "agents": { "research": "<agentId>" },
   "loops": { "review_plan": 0, "test": 0, "review": 0 },
   "steps": { "triage-initial": "completed", "research": "in_progress" }
 }
@@ -105,6 +121,8 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 - `skips` は tier から導出した結果(自動スキップ含む)の記録。人が選ぶ項目ではない
 - `fixed` は `fixed:` 指定時のみ `{ "model": "opus", "effort": "high" }`
+- `models` は各ステップを実際に起動した `<model>/<effort>` の記録(fallback で inline にしたステップは `inline`)。`agents` は質問リレーの再開に使う agentId(ステップ完了時に消してよい)
+- `effort_enforced` は `dev-effort-*` 定義で起動できたか(false ならセッション effort で動いている)
 - `/dev` 開始時に同 issue の dev-state.json が既に存在する場合は内容を読み、未完了の最初のステップからの再開をユーザーに提案する(auto では自動で再開)。tier は記録済みの値を使う
 
 ## 作業ブランチの準備
@@ -138,7 +156,7 @@ tier 確定後(tier 引数指定時はセットアップ直後、それ以外は
 2. **前提成果物の確認**: 表の「前提成果物」が存在するか確認する。存在しない場合(スキップや前回実行の欠如による):
    - サブスキル側に fallback があればそれに委ねる
    - fallback が無い場合 — `auto`: 警告を dev-state.json に記録し、続行可能なら続行、不可能ならそのステップもスキップ扱いにする。`normal`: ユーザーに続行可否を確認する
-3. **実行**: 実行形態表に従って呼び出す(inline = Skill ツール + 引数、agent = Agent ツールに model を渡す。後述)
+3. **実行**: 実行形態表に従って Agent ツールで起動する(`subagent_type: dev-effort-<effort>`、`model: <model>`。後述「agent ステップの依頼形式」)。normal で `status: needs-input` が返ったら「質問リレー」で回答を戻して再開する
 4. **HTML 成果物のオープン**: そのステップが生成・更新した `.html` のうち、表の「主な成果物」に挙げたものだけを Skill ツールで `/open <絶対パス>` を呼んで開く(review の `review-claude.html` / `review-codex.html` / `context.html` のような中間成果物は開かない)。agent ステップの成果物も完了確認後に dev 側で開く。ループでの再生成・更新時も毎回開き直す
 5. **チェックポイント判定**: 指定されていれば停止する(「チェックポイント停止の挙動」参照)
 
@@ -149,29 +167,58 @@ tier 確定後(tier 引数指定時はセットアップ直後、それ以外は
 | `auto` | パイプライン中はユーザーに質問しない。plan の方針選択・曖昧な要件・config 追記もすべて推奨案で自動決定し、**置いた仮定は各成果物に明記させる** |
 | `normal` | plan の方針選択・config 追記の承認・tier 確定時の確認のみ質問する。それ以外は中断せず進める |
 
-- mode は inline ステップの呼び出し引数として明示的に渡す(例: `/plan 123 auto`)
-- agent ステップは設計上ユーザーへ質問できないため、質問が発生しない引数(`auto` 相当)で起動する
+- mode はサブスキルの呼び出し引数として明示的に渡す(例: `/plan 123 normal`)。normal でも auto に落とさない
+- subagent には AskUserQuestion が無い(対話セッションでは subagent は常に background で動く)。normal での質問は「質問リレー」で dev が代行する。並列グループ(A / B)のうち質問が発生しうるのは test だけで、それもリレーで扱える
 - チェックポイント停止・ループ上限到達時の報告は mode に関わらず必ず行う
 
 ### agent ステップの依頼形式
 
-Agent ツール(`subagent_type: general-purpose`、**`model` に実行形態表の値**)で起動し、プロンプトに以下を含める:
+Agent ツール(`subagent_type: dev-effort-<effort>`、`model: <model>`。いずれも実行形態表の値)で起動し、プロンプトに以下を含める:
 
-- Skill ツールで対象スキルを実行すること(例: `Skill ツールで review-plan を args「123」で実行してください`)。呼び出し引数はステップ定義表のとおり(mode を取るスキルには `auto` を渡す)
+- Skill ツールで対象スキルを実行すること(例: `Skill ツールで review-plan を args「123」で実行してください`)。呼び出し引数はステップ定義表のとおり(mode を取るスキルには dev の mode をそのまま渡す)
 - リポジトリルートと成果物ディレクトリ(`tmp/issues/<issue番号>/`)の**絶対パス**
-- 「ユーザーへの質問はできない。判断に迷う場合は保守的に倒し、その旨を成果物に明記する」という制約
+- mode が `auto` のとき: 「ユーザーへの質問はできない。判断に迷う場合は保守的に倒し、その旨を成果物に明記する」という制約
+- mode が `normal` のとき: 「AskUserQuestion は使えない。質問が必要になったら `tmp/issues/<issue番号>/questions.json` に書き、最終メッセージを `status: needs-input` として一旦終了せよ。回答は再開時のメッセージで渡す」という質問リレーの指示(フォーマットは後述)
 - 「検索は Grep ツールまたは `git grep` / `rg` を使い、Bash の `grep -r` / `find <dir>` は使わない(gitignore された `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになる)」という制約
-- 最終メッセージで返すサマリの形式:
+- 最終メッセージの 1 行目は `status: done` または `status: needs-input`。続けて返すサマリの形式:
   - triage: tier / source / 決め手(3 行)
+  - research: AC 数、未確認の仮定の件数、難易度シグナルの要約(3 行)
+  - plan: 選択した実装方法、タスク数、副作用 identifier 数、tier 昇格推奨の有無(lite 時)
   - review-plan: 判定(OK / 差し戻し)、must / should / OK の件数、must の要旨(1 行ずつ)
+  - implement: 変更ファイル数、Deviations の件数と要旨、lint / type check の結果
   - review: must / should / nit の件数、両者一致の件数、ブロッカー概要、総合判断
   - test: 失敗項目の有無と件数、compare.html の有無
   - capture / create-pr-text / quiz / notify-discord: 生成した成果物のパスと要点(capture はスキップ理由があればそれ)
 
+起動時に返る agentId を dev-state.json の `agents` に記録する(質問リレーの再開に使う)。
+
+### 質問リレー(normal モードの subagent からの質問)
+
+1. `status: needs-input` が返ったら `tmp/issues/<issue番号>/questions.json` を読み、その内容を**そのまま** AskUserQuestion でユーザーに提示する(質問文・選択肢・multiSelect を変えない。自由入力も受け付ける)
+2. 回答を questions.json の `answers` に書き込み、SendMessage で同じ subagent(`agents` に記録した agentId)に「questions.json に回答を書いた。続きから進めよ」と送って再開する。再開した subagent は文脈を保持したまま続きから進む
+3. `status: done` が返るまで 1〜2 を繰り返す(research は 1 テーマずつ質問するので複数回になりうる)
+4. 再開できない(subagent が失われた等)場合は、questions.json の回答を含めて同じステップを新規起動する(サブスキルは既存成果物と回答を読んで再開する)
+
+questions.json のフォーマット(AskUserQuestion と同じ構造):
+
+```json
+{
+  "step": "research",
+  "round": 1,
+  "questions": [
+    { "question": "...", "header": "AC", "multiSelect": false,
+      "options": [ { "label": "...", "description": "..." } ] }
+  ],
+  "answers": null
+}
+```
+
+`answers` は `{ "<question>": "<回答(自由入力含む)>" }` の形で dev が書く。チェックポイント停止・tier 確定時の確認は dev 自身の質問なのでリレーの対象外。
+
 ### 並列グループの実行
 
-- **グループ A(create-pr-text ∥ test)**: create-pr-text の subagent を background で起動した**直後に** test を実行する(test が agent の場合も同一メッセージで並列起動してよい)。両方の完了を確認してから review へ進む
-- **グループ B(quiz ∥ notify-discord)**: quiz の subagent を background で起動した直後に notify-discord を実行する。両方の完了を確認してから `/dev` を終了する
+- **グループ A(create-pr-text ∥ test)**: 2 つの subagent を**同一メッセージで並列起動**する。両方の完了(test は `status: done`)を確認してから review へ進む
+- **グループ B(quiz ∥ notify-discord)**: 同様に同一メッセージで並列起動し、両方の完了を確認してから `/dev` を終了する
 - グループ内のステップに**チェックポイントが指定されている場合、そのグループは表の順の直列実行に落とす**
 - グループ内の片方がスキップされた場合、残りを単独で通常実行する
 
@@ -244,6 +291,6 @@ review ループを抜けたら、グループ B に進む前に plan.md の「�
 ## 注意事項
 
 - mode に応じた質問頻度を守る。セットアップ質問・tier 確定時の確認(normal)・チェックポイント停止・ループ上限到達時の報告・DoD 未充足かつループ上限到達時の報告は mode の適用対象外(必ず行う)
-- ステップの増減・並列グループ・実行形態の変更はステップ定義表と実行形態表の修正だけで完結させる。**サブスキルの SKILL.md に model / effort を書かない**(frontmatter の model 上書きは静的で、そのターンの残り全体に残るため fixed と両立しない)
+- ステップの増減・並列グループ・実行形態の変更はステップ定義表と実行形態表の修正だけで完結させる。**サブスキルの SKILL.md に model / effort を書かない**(frontmatter の model 上書きは静的で、そのターンの残り全体に残るため fixed と両立しない)。effort の器は `assets/agents/dev-effort-*.md` の 5 段階だけで、値の割り当ては実行形態表が持つ
 - サブスキル間の成果物規約(必須セクション・フォーマット)は各サブスキルの SKILL.md が定義する。dev は **成果物パスの受け渡し・実行順序・実行形態(model)・HTML 成果物のオープン・ループ・状態管理** にのみ責務を持つ
-- subagent の結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行に切り替える(Fable で動くことになるが、止まるよりよい)
+- subagent の結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行(Skill ツールで本会話内)に切り替える(セッションの model / effort で動くことになるが、止まるよりよい。dev-state.json の `models` に `inline` と記録する)

@@ -14,7 +14,8 @@ GitHub issue ( $ARGUMENTS ) に対して、実装に着手する前の技術調�
 
 - `<issue>`: issue 番号(`123`、`#123`)または URL。空の場合はユーザーに質問する
 - `[mode]`: `auto` / `normal`。`auto` の場合はユーザーに質問せず、**質問したかった内容を「未確認の仮定」として research.md に明記する**。省略時は質問してよい
-- `[tier]`: `/dev` から渡される難易度(`M` / `L` / `XL` / `fixed:<model>[/<effort>]`)。並列調査で起動する Agent の model を決めるためだけに使う(後述)。省略時は `opus`
+- `[tier]`: `/dev` から渡される難易度(`M` / `L` / `XL` / `fixed:<model>[/<effort>]`)。並列調査で起動する Agent の model / effort を決めるためだけに使う(後述)。省略時は `opus/low`
+- **subagent として実行され AskUserQuestion が使えない場合**(`/dev` から起動されたとき): `normal` でも直接は質問できない。質問は呼び出し元の指示どおり `tmp/issues/<issue番号>/questions.json`(AskUserQuestion と同じ構造: `question` / `header` / `multiSelect` / `options[]`)に書き、最終メッセージを `status: needs-input` として一旦終了する。回答(`answers`)が渡されたら文脈を保ったまま続きから進める
 
 ## 手順
 
@@ -44,7 +45,7 @@ GitHub issue ( $ARGUMENTS ) に対して、実装に着手する前の技術調�
 
 ### 調査の並列化
 
-step 6(影響範囲)・step 7(リファレンス)・step 8(盲点候補)は互いに独立した調査なので、コードベースが大きい場合は Agent ツール(`general-purpose` / `Explore`)で**並列に実行してよい**。Agent の `model` は `opus` とする(grep と要約が仕事で、本スキルより判断力を要しない)。tier が `fixed:<model>` のときはその model を渡す。各エージェントには調査対象・観点・返してほしい形式(ファイルパスと根拠)を明示して依頼し、結果を本スキルで統合する。小規模なら inline で順に行って構わない。依頼時には「検索は Grep ツールまたは `git grep` / `rg` を使い、Bash の `grep -r` / `find <dir>` は使わない(gitignore された `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになる)」を制約として含める。
+step 6(影響範囲)・step 7(リファレンス)・step 8(盲点候補)は互いに独立した調査なので、コードベースが大きい場合は Agent ツール(`general-purpose` / `Explore`)で**並列に実行してよい**。Agent の model / effort は tier で決める: `M` → `opus/low`、`L` / `XL` → `opus/medium`、`fixed:<model>[/<effort>]` → その値、省略時 → `opus/low`(grep と要約が仕事で、本スキルより判断力を要しない)。`subagent_type` は `dev-effort-<effort>`(`/dev` が `~/.claude/agents/` に置く定義。無い・effort 省略時は `general-purpose`)、`model` 引数に model を渡す。各エージェントには調査対象・観点・返してほしい形式(ファイルパスと根拠)を明示して依頼し、結果を本スキルで統合する。小規模なら inline で順に行って構わない。依頼時には「検索は Grep ツールまたは `git grep` / `rg` を使い、Bash の `grep -r` / `find <dir>` は使わない(gitignore された `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになる)」を制約として含める。
 
 ### 出力(md + html の 2 種生成)
 

@@ -67,8 +67,8 @@
     "side_effect_identifiers_min_for_XL": 3
   },
   "fallback": {
-    "_comment": "When Jev is unavailable, the triage runner (Opus, effort medium) answers the same questions with a probability 0-1 each, in JSON, using only the same state. Same thresholds apply.",
-    "model": "opus",
+    "_comment": "When Jev is unavailable, the triage runner answers the same questions with a probability 0-1 each, in JSON, using only the same state. Same thresholds apply. The runner is whatever /dev launched triage on (dev-opus-medium = Opus 5.5, pinned in the agent definition); 'model' here documents that choice and is not itself used to launch anything. Never Opus 5 or older.",
+    "model": "opus-5.5+ (via dev-opus-medium)",
     "effort": "medium",
     "timeout_seconds": 10
   },

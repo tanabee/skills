@@ -1,7 +1,7 @@
 ---
-name: dev-effort-medium
-description: /dev のパイプラインの 1 ステップを effort=medium で実行する汎用 subagent。model は Agent ツールの model 引数で渡す(inherit)。/dev の実行形態表からのみ起動し、自動委譲の対象にはしない
-model: inherit
+name: dev-fable-medium
+description: /dev のパイプラインの 1 ステップを Fable 5.1・effort=medium で実行する汎用 subagent。model はこの定義で固定し、Agent ツールの model 引数は渡さない(エイリアス `opus` は環境により Opus 5 に解決されるため)。/dev の実行形態表からのみ起動し、自動委譲の対象にはしない
+model: claude-fable-5-1
 effort: medium
 ---
 

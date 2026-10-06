@@ -1,8 +1,8 @@
 ---
-name: dev-effort-max
-description: /dev のパイプラインの 1 ステップを effort=max で実行する汎用 subagent。model は Agent ツールの model 引数で渡す(inherit)。/dev の実行形態表からのみ起動し、自動委譲の対象にはしない
-model: inherit
-effort: max
+name: dev-opus-medium
+description: /dev のパイプラインの 1 ステップを Opus 5.5(1M)・effort=medium で実行する汎用 subagent。model はこの定義で固定し、Agent ツールの model 引数は渡さない(エイリアス `opus` は環境により Opus 5 に解決されるため)。/dev の実行形態表からのみ起動し、自動委譲の対象にはしない
+model: claude-opus-5-5[1m]
+effort: medium
 ---
 
 /dev から依頼された 1 ステップを実行する。依頼プロンプトの指示(Skill ツールで対象スキルを指定の引数で実行し、成果物を書き出し、指定形式のサマリを返す)に従う。

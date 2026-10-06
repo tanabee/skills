@@ -29,7 +29,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | 5 | triage-promote | `/triage <issue> promote` | triage.json | plan.md | — |
 | 6 | review-plan | `/review-plan <issue>` | review-plan.md/.html | plan.md, checklist.html | — |
 | 7 | capture-before | `/capture <issue> before auto` | screenshots/before/ | checklist.html | — |
-| 8 | implement | `/implement <issue> <mode>` | コード, implementation-notes.md, report.md/.html | plan.md | — |
+| 8 | implement | `/implement <issue> <mode>`(ループからの再実行は `… <mode> fix`) | コード, implementation-notes.md, report.md/.html | plan.md | — |
 | 9 | create-pr-text | `/create-pr-text <issue>` | pr.md | plan.md, report.md | A |
 | 10 | test | `/test <issue> <mode>` | checklist.html 更新, screenshots/after/, compare.html | checklist.html, implementation-notes.md | A |
 | 11 | review | `/review <issue> <tier>` | review.md/.html | 実装済みコード | — |
@@ -42,7 +42,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 ### 実行形態表(tier × ステップ)
 
-値は `agent:<model>/<effort>`(Agent ツールで別コンテキストとして実行。`subagent_type` は `dev-effort-<effort>`、`model` 引数に `<model>`)/ `skip`。**ステップはすべて agent で動かし、inline(セッションモデル)で動くのは dev 本体だけ**。セッションの model / effort はステップの実行に影響しないので、人が `/model` `/effort` を切り替える必要はない。
+値は `agent:<model>/<effort>`(Agent ツールで別コンテキストとして実行。`subagent_type` に **`dev-<model>-<effort>`** を指定し、**`model` 引数は渡さない**)/ `skip`。model はエージェント定義の frontmatter でフル ID に固定してある(`opus` = `claude-opus-5-5[1m]`、`fable` = `claude-fable-5-1`)。Agent ツールの `model` 引数はエイリアスしか受け付けず、`opus` が環境によって **Opus 5 に解決される**ため使わない。**ステップはすべて agent で動かし、inline(セッションモデル)で動くのは dev 本体だけ**。セッションの model / effort はステップの実行には影響しないが、**dev 本体はセッションモデルで動く**ので、セッションは Opus 5.5 以上を推奨する(※4)。
 
 | ステップ | S | M | L | XL | fixed:\<model\>/\<effort\> |
 |---|---|---|---|---|---|
@@ -54,30 +54,35 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | triage-promote | skip | agent:opus/medium | agent:opus/medium | agent:opus/medium | skip |
 | review-plan | skip | agent:opus/high ※1 | agent:opus/xhigh | agent:fable/xhigh | agent:\<model\>/\<effort\> |
 | capture-before | skip | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
-| implement | agent:opus/medium | agent:fable/high | agent:fable/xhigh | agent:fable/xhigh | agent:\<model\>/\<effort\> |
+| implement | agent:opus/medium | agent:opus/xhigh | agent:opus/xhigh | agent:fable/xhigh ※3 | agent:\<model\>/\<effort\> |
 | create-pr-text | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/medium | agent:\<model\>/\<effort\> |
 | test | agent:opus/low ※2 | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
 | review(親: 収集・統合) | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
 | └ Claude レビュアー Agent(review 内) | opus/medium(正確性・副作用のみ) | opus/high | fable/xhigh | fable/xhigh | \<model\>/\<effort\> |
 | quiz | skip | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
 | notify-discord | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
-| dev 本体(状態管理・DoD ゲート・config 学習) | inline(セッションモデル) | ← | ← | ← | inline |
+| dev 本体(状態管理・DoD ゲート・config 学習・質問リレー) | inline(セッションモデル。**Opus 5.5 以上を推奨** ※4) | ← | ← | ← | inline |
 
 - triage-initial は tier が未確定の時点で実行するため、tier 引数が無い限り常に agent:opus/medium
 - ※1 M の review-plan は、plan.md の「副作用 identifier」セクションが空 **かつ** `.agents/skills-config/review-plan/config.json` の `attentions` に plan の変更対象へ該当する項目が無い場合、dev が自動スキップしてよい(dev-state.json に理由を記録)
 - ※2 S の test は checklist の内容に従う(UI 変更が無ければ unit テスト項目だけになり、ブラウザ操作は発生しない)
-- 「└」の行はサブスキル内部で起動する Agent。research / review が tier 引数から model / effort を決める(subagent_type は同じ `dev-effort-<effort>`)
-- `fixed:<model>` で effort が省略された場合は `subagent_type: general-purpose` + `model` で起動し、effort はセッション値を継承する
+- ※3 **XL だけ implement を Fable に残す**。XL の定義が「実装方式の候補間でアーキテクチャが変わる / AC が未確定」であり、**plan が具体的になりえない**(実装時にしか決まらない判断が本質的に残る)ため。M / L は plan が「探索の代替」(正確なパス・シグネチャ・テストケース。`/plan` の「記述の原則」)まで書けている前提で Opus に落とす。**effort は tier に関わらず常に xhigh**: 低 effort はツール呼び出しを統合してターン数を減らすが、implement で減るのは**検証のターン**(テスト実行・変更後の再読・確認)であり、安くなった分だけ確認を省いた実装になるため。implement は Opus で動くので effort は Fable 枠に影響せず、下げる動機もない
+- **M / L で plan が曖昧だった場合の守りは予測ではなく feedback で行う**: implement が二回目の設計をして失敗したら、test 失敗ループの内側(implement 単独リトライ。**Fable 枠 0**)が拾い、実装では直せないと判断したら `status: needs-replan` で plan 巻き戻しに出る(後述)。内側リトライが安いので、plan 具体度を事前に採点して model を振り分ける機構は置かない(指標を増やすと較正対象が増え、判定を外したときの切り分けも難しくなる)
+- ※4 **dev 本体はセッションモデルで動く唯一の部分**。13 ステップの起動・要約の受領・state 更新・HTML オープン・DoD 判定・質問リレーで **80〜100 ターン**を回し、毎ターン文脈全体を再送する(SKILL.md だけで 12〜15k、終盤 30k 前後)。セッションが Fable だと **どのステップより多く Fable 枠を消費しうる**(prompt cache が枠にどう数えられるか不明なため、幅は 50k〜2M)。dev 本体の判断(DoD 証跡の照合・attentions 追記要否・チェックポイント報告)は小さく Opus で足りるので、**セッションは Opus 5.5 以上を推奨**(`/model` の選択肢から明示的に選ぶ。`opus` エイリアスは Opus 5 を指しうるので使わない)。表の Fable 配置はセッションモデルに依存せず、切り替えても各ステップの model は変わらない
+- 「└」の行はサブスキル内部で起動する Agent。research / review が tier 引数から model / effort を決める(subagent_type は同じ `dev-<model>-<effort>`)
+- `fixed:<model>/<effort>` は `dev-<model>-<effort>` で起動する。`<model>` が `opus` / `fable` 以外(定義が無い)か effort が省略された場合は、**Opus 5 に落ちる可能性があるエイリアス起動はせず**、ユーザーに「定義が無い」と報告して停止する(`auto` でも)
 - normal モードで質問が発生しうるステップ(research / plan / implement / test)は「質問リレー」で扱う(後述)。subagent 化のために auto に落とすことはしない
-- 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・implement・L 以上のレビュアー)だけ Fable に残し、作業・診断寄りのステップは Opus に落とす**。Sonnet / Haiku は精度リスクを取ってまで使わず、安くしたければ Opus の effort を下げる
+- 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・L 以上のレビュアー)だけ Fable に残し、作業・診断寄りのステップは Opus に落とす**。Sonnet / Haiku は精度リスクを取ってまで使わず、安くしたければ Opus の effort を下げる。**Opus は 5.5 以上のみ**(Opus 5 以前は性能面で使わない。エージェント定義のフル ID 固定がその担保)
+- **implement を Fable から外す根拠**: implement は全ステップ中最大の消費源だが、plan が「探索の代替」になる具体度(正確なパス・シグネチャ・テストケース)まで書けていれば implement に残る判断は少なく、Opus で足りる。plan が具体的になりえない XL だけ Fable に残す(※3)
+- **effort を下げて節約してよいステップ**: 長い文書を一度に書く quiz / create-pr-text / research の執筆部分。**implement と plan では effort を下げない**(前者は減るターンが検証のターンであり、後者は判断の質がそのまま後段にカスケードする)
 
-### エージェント定義の準備(effort を効かせる)
+### エージェント定義の準備(model と effort を固定する)
 
-Agent ツールは `model` を呼び出し時に渡せるが effort は渡せない。effort は subagent 定義(`~/.claude/agents/*.md`)の frontmatter でだけ固定できるため、本スキルの `assets/agents/` にある `dev-effort-{low,medium,high,xhigh,max}.md`(`model: inherit` + `effort` 固定)を使う。セットアップ時に次を行う:
+Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか受け付けず、`opus` は環境によって Opus 5 に解決される。effort も引数では渡せない。どちらも subagent 定義(`~/.claude/agents/*.md`)の frontmatter でだけ固定できるため、本スキルの `assets/agents/` にある **10 ファイル** `dev-{opus,fable}-{low,medium,high,xhigh,max}.md`(`model` をフル ID で固定 + `effort` 固定)を使う。セットアップ時に次を行う:
 
-1. `~/.claude/agents/dev-effort-*.md` の 5 ファイルが存在し、`assets/agents/` と内容が一致するか `diff -q` で確認する。無い・違うものは `assets/agents/` からコピーする(`mkdir -p ~/.claude/agents`)。追加・更新は数秒で自動反映される(再起動不要)
-2. ただし `~/.claude/agents/` を今回新規作成した場合(そのスコープで初のエージェント定義)は Claude Code の再起動まで定義が読まれない。その旨をユーザーに伝え、今回の run は次の fallback で進める
-3. fallback: `dev-effort-<effort>` を Agent ツールが受け付けない場合は `subagent_type: general-purpose` + `model` で起動する(effort はセッション値を継承)。dev-state.json に `effort_enforced: false` を記録する
+1. `~/.claude/agents/dev-opus-*.md` / `dev-fable-*.md` の 10 ファイルが存在し、`assets/agents/` と内容が一致するか `diff -q` で確認する。無い・違うものは `assets/agents/` からコピーする(`mkdir -p ~/.claude/agents`)。旧 `dev-effort-*.md` が残っていれば削除する(`model: inherit` のため、エイリアス経由で Opus 5 に落ちうる)。追加・更新は数秒で自動反映される(再起動不要)
+2. ただし `~/.claude/agents/` を今回新規作成した場合(そのスコープで初のエージェント定義)は Claude Code の再起動まで定義が読まれない。その旨をユーザーに伝え、**再起動後の再実行を案内して停止する**
+3. `dev-<model>-<effort>` を Agent ツールが受け付けない場合も同様に**停止して報告する**。`general-purpose` + `model` エイリアスへの fallback は行わない(Opus 5 に落ちる経路を残さないため)。dev-state.json に `agents_ready: false` と理由を記録する
 
 ## 開始時セットアップ
 
@@ -86,9 +91,21 @@ Agent ツールは `model` を呼び出し時に渡せるが effort は渡せな
 1. **mode**: `auto` / `normal`(推奨: `normal`)
 2. **チェックポイント**(multiSelect): triage 以外のステップ 2〜12 のうち「完了後に停止して内容を確認したいステップ」を 0 個以上(デフォルト: なし)
 
+3. **セッションモデル**(セッションが Opus 5.5 以上でないときだけ表示): `このまま続行` / `中断して /model で切り替え後に再実行`(推奨: 中断して切り替え)。理由は実行形態表 ※4
+
 スキップするステップは tier から決まるため、個別に質問しない。特定ステップを飛ばしたい場合は tier 引数で調整する(例: research を飛ばすなら `S`)。
 
-セットアップ質問の直後に「エージェント定義の準備」(前述)を行い、`effort_enforced` を dev-state.json に記録する。
+### セッションモデルの確認
+
+セットアップ質問を出す前に、自身が動いているモデルを確認する(システムプロンプトのモデル名で判定)。
+
+- **Opus 5.5 以上**: 何もしない(質問 3 は出さない)
+- **Fable**: 質問 3 を含める。理由は Fable 枠の消費(※4)
+- **Opus 5 以前 / Sonnet / Haiku**: 質問 3 を含める。理由は dev 本体の判断精度(DoD 判定・config 学習)
+- 「中断」が選ばれたら dev-state.json を書かずに終了し、`/model` で Opus 5.5 以上を選んで `/dev <同じ引数>` を再実行するよう案内する。「続行」なら `session_model` を dev-state.json に記録して進める(**auto でも質問 3 は出す**。セットアップ質問は mode の適用対象外)
+- `fixed:fable/...` / `full` 指定時も同じ(各ステップが Fable で動くことと、dev 本体が Fable で動くことは別の消費)
+
+セットアップ質問の直後に「エージェント定義の準備」(前述)を行い、`agents_ready` を dev-state.json に記録する。
 
 ## tier の確定と反映
 
@@ -111,18 +128,22 @@ Agent ツールは `model` を呼び出し時に渡せるが effort は渡せな
   "fixed": null,
   "checkpoints": ["plan", "review"],
   "skips": ["quiz"],
-  "effort_enforced": true,
+  "agents_ready": true,
+  "session_model": "claude-opus-5-5[1m]",
   "models": { "triage-initial": "opus/medium", "research": "opus/high", "plan": "fable/high" },
   "agents": { "research": "<agentId>" },
-  "loops": { "review_plan": 0, "test": 0, "review": 0 },
+  "loops": { "review_plan": 0, "test_inner": 0, "test_outer": 0, "review": 0 },
+  "test_failures": [["[AC2] 不正なメールでエラー"], ["[AC2] 不正なメールでエラー"]],
   "steps": { "triage-initial": "completed", "research": "in_progress" }
 }
 ```
 
 - `skips` は tier から導出した結果(自動スキップ含む)の記録。人が選ぶ項目ではない
 - `fixed` は `fixed:` 指定時のみ `{ "model": "opus", "effort": "high" }`
-- `models` は各ステップを実際に起動した `<model>/<effort>` の記録(fallback で inline にしたステップは `inline`)。`agents` は質問リレーの再開に使う agentId(ステップ完了時に消してよい)
-- `effort_enforced` は `dev-effort-*` 定義で起動できたか(false ならセッション effort で動いている)
+- `models` は各ステップを実際に起動した `<model>/<effort>` の記録。`agents` は質問リレーの再開に使う agentId(ステップ完了時に消してよい)
+- `agents_ready` は `dev-<model>-<effort>` 定義で起動できたか(false なら停止している。fallback は無い)
+- `session_model` は dev 本体が動いているモデル。Fable のまま続行した run を後から集計で見分けるために記録する
+- `loops.test_inner` は外側に出るたび 0 にリセットする。`test_failures` は内側の各ラウンドで失敗した checklist 項目名の配列(早期エスカレーション判定に使う。外側に出たらクリアする)
 - `/dev` 開始時に同 issue の dev-state.json が既に存在する場合は内容を読み、未完了の最初のステップからの再開をユーザーに提案する(auto では自動で再開)。tier は記録済みの値を使う
 
 ## 作業ブランチの準備
@@ -156,7 +177,7 @@ tier 確定後(tier 引数指定時はセットアップ直後、それ以外は
 2. **前提成果物の確認**: 表の「前提成果物」が存在するか確認する。存在しない場合(スキップや前回実行の欠如による):
    - サブスキル側に fallback があればそれに委ねる
    - fallback が無い場合 — `auto`: 警告を dev-state.json に記録し、続行可能なら続行、不可能ならそのステップもスキップ扱いにする。`normal`: ユーザーに続行可否を確認する
-3. **実行**: 実行形態表に従って Agent ツールで起動する(`subagent_type: dev-effort-<effort>`、`model: <model>`。後述「agent ステップの依頼形式」)。normal で `status: needs-input` が返ったら「質問リレー」で回答を戻して再開する
+3. **実行**: 実行形態表に従って Agent ツールで起動する(`subagent_type: dev-<model>-<effort>`。後述「agent ステップの依頼形式」)。normal で `status: needs-input` が返ったら「質問リレー」で回答を戻して再開する
 4. **HTML 成果物のオープン**: そのステップが生成・更新した `.html` のうち、表の「主な成果物」に挙げたものだけを Skill ツールで `/open <絶対パス>` を呼んで開く(review の `review-claude.html` / `review-codex.html` / `context.html` のような中間成果物は開かない)。agent ステップの成果物も完了確認後に dev 側で開く。ループでの再生成・更新時も毎回開き直す
 5. **チェックポイント判定**: 指定されていれば停止する(「チェックポイント停止の挙動」参照)
 
@@ -173,7 +194,7 @@ tier 確定後(tier 引数指定時はセットアップ直後、それ以外は
 
 ### agent ステップの依頼形式
 
-Agent ツール(`subagent_type: dev-effort-<effort>`、`model: <model>`。いずれも実行形態表の値)で起動し、プロンプトに以下を含める:
+Agent ツール(`subagent_type: dev-<model>-<effort>`。実行形態表の値。`model` 引数は渡さない)で起動し、プロンプトに以下を含める:
 
 - Skill ツールで対象スキルを実行すること(例: `Skill ツールで review-plan を args「123」で実行してください`)。呼び出し引数はステップ定義表のとおり(mode を取るスキルには dev の mode をそのまま渡す)
 - リポジトリルートと成果物ディレクトリ(`tmp/issues/<issue番号>/`)の**絶対パス**
@@ -184,6 +205,7 @@ Agent ツール(`subagent_type: dev-effort-<effort>`、`model: <model>`。いず
   - triage: tier / source / 決め手(3 行)
   - research: AC 数、未確認の仮定の件数、難易度シグナルの要約(3 行)
   - plan: 選択した実装方法、タスク数、副作用 identifier 数、tier 昇格推奨の有無(lite 時)
+  - implement: 完了したタスク数、Deviations の件数、`fix` 時は直した内容(または `status: needs-replan` と plan の何を直すか)
   - review-plan: 判定(OK / 差し戻し)、must / should / OK の件数、must の要旨(1 行ずつ)
   - implement: 変更ファイル数、Deviations の件数と要旨、lint / type check の結果
   - review: must / should / nit の件数、両者一致の件数、ブロッカー概要、総合判断
@@ -226,16 +248,25 @@ questions.json のフォーマット(AskUserQuestion と同じ構造):
 
 dev が実施内容のサマリを組み立てて `/notify-discord <サマリ>` として渡す。**pitch の要領**(結論・成果を先頭に、続けて要点)で構成する: 何ができたか(1-2 行)→ tier と使ったモデル → テスト・レビュー結果の要点 → 実施ステップ → 主要成果物のパス(詳細な解説は quiz.html の解説パートを案内)。notify-discord 側からユーザーへの質問が発生しない状態で呼び出すこと(`webhook_url` 未設定なら dev が事前に検出し、そのステップだけ inline で実行する)。
 
-## ループ(3 種)と上限
+## ループ(4 種)と上限
+
+test 失敗ループは **内側(implement 単独リトライ)と外側(plan 巻き戻し)の二段** に分かれる。内側は implement と test だけを回すので **plan(Fable)を消費しない**。外側に出ると plan の再実行が発生するため、**内側を使い切ってから外側に出る**。
 
 | ループ | 発動条件 | 戻り先 | 上限(S) | 上限(M 以上・fixed) |
 |---|---|---|---|---|
 | review-plan 差し戻し | 修正必須(must)が 1 件以上 | plan(修正)→ review-plan 再実行 | —(S は review-plan なし) | 3 回 |
-| test 失敗 | チェックリストに失敗項目 | plan(更新)→ review-plan → implement → …(表の順に再実行。**capture-before と triage は除く**) | test 実行 1 回 | test 実行 3 回 |
+| **test 失敗(内側)** | チェックリストに失敗項目 | **implement(失敗項目の修正)→ test 再実行**。plan には戻さない | test 実行 1 回 | **test 実行 3 回** |
+| **test 失敗(外側)** | 内側が上限到達、または**早期エスカレーション条件**に該当 | plan(更新)→ review-plan → implement → …(表の順に再実行。**capture-before と triage は除く**) | 0 回(S は即 M 昇格) | **1 回** |
 | review 差し戻し | must 指摘が 1 件以上 | implement(指摘の修正)→ review 再実行 | review 実行 2 回 | review 実行 3 回 |
 
+- **早期エスカレーション条件**: 内側で **同一の checklist 項目が 2 回連続して失敗**したら、内側上限を待たずに外側へ出る。同じ箇所で 2 回転ぶのは実装の揺らぎではなく計画の欠陥のサインで、3 回目を回しても同じ箇所で転ぶため(待ち時間の純損失)。失敗項目が毎回違う場合は内側上限まで回す。判定には `checklist.html` の失敗項目を使い、各ラウンドの失敗項目を dev-state.json の `test_failures` に記録する
+- 外側に出るたび内側カウントを 0 にリセットする。**最悪ケースの test 実行回数 = 内側 3 × (外側 1 + 1) = 6 回**
+- **外側を 1 回に絞る理由**: 内側と外側は目的が違う。内側は**実装の欠陥**を直し、ラウンドごとに失敗項目が変わるなら情報が増えている。外側は**計画の欠陥**を直すもので、1 度書き直してもなお失敗するなら「必要な情報がパイプラインに入っていない」(AC が曖昧 / research が足りない / 暗黙の前提が違う)という証拠であり、同じ入力で同じエージェントがもう一度書き直しても出てこない。**そこが人に渡すべき点**。外側 1 周あたり plan の Fable 110k を払うことも考えると、2 周目の期待値は低い
 - 各ループは**独立にカウント**し、dev-state.json の `loops` に記録する
 - **S で上限に達した場合は tier 判定の誤りとみなし、tier を M に昇格して(`tier_source: "loop-promote"`)残りのステップを M として続行する**(research は飛ばしたまま。review-plan と quiz は以降有効になる)。M 以上で上限に達しても解消しない場合はループを終了し、状況をユーザーに報告して判断を仰ぐ(**auto でもここは停止する**)
+- **内側リトライでの implement 再実行は `/implement <issue> <mode> fix` で起動し、失敗した checklist 項目と `/test` の失敗内容をプロンプトに渡す**(何を直すべきか分かる状態で起動する)。計画自体の変更はさせない
+- **implement が `status: needs-replan` を返したら、内側カウントに関わらず即座に外側へエスカレーションする**(「計画を直さないと実装では直せない」という implement 側からの申告)。返ってきた「plan の何を直す必要があるか」を `/plan` の再実行プロンプトに渡す
+- review 差し戻しループの implement も同様に `fix` で起動し、must 指摘をプロンプトに渡す
 - 再計画・修正時は `tmp/issues/<issue番号>/` の既存成果物を新規作成し直すのではなく、失敗・指摘内容を反映して**更新**する
 - **review ループで実装が変わった場合は pr.md も更新する**(create-pr-text を agent で再実行)
 - ループ再突入時の確認頻度は mode に従う(auto: 確認なし、normal: 再計画時の方針選択のみ)
@@ -246,7 +277,7 @@ review ループを抜けたら、グループ B に進む前に plan.md の「�
 
 - 各項目を**証跡に基づいて**判定する(例: checklist.html の全項目が checked / review.md の must が 0 / lint・type check が pass / 必要なドキュメント更新済み)
 - 判定結果を dev-state.json に記録する
-- **未充足項目がある場合**: 対応するループ(test / review)または implement に戻る。該当ループが上限到達済みならユーザーに報告して判断を仰ぐ
+- **未充足項目がある場合**: 対応するループに戻る。checklist 由来の未充足は **まず test の内側ループ**(implement 単独リトライ)に戻し、内側が上限到達済みなら外側へ。review 由来は review ループへ。該当ループが上限到達済みならユーザーに報告して判断を仰ぐ
 - 全項目充足でグループ B へ進む
 
 ## チェックポイント停止の挙動
@@ -290,7 +321,7 @@ review ループを抜けたら、グループ B に進む前に plan.md の「�
 
 ## 注意事項
 
-- mode に応じた質問頻度を守る。セットアップ質問・tier 確定時の確認(normal)・チェックポイント停止・ループ上限到達時の報告・DoD 未充足かつループ上限到達時の報告は mode の適用対象外(必ず行う)
-- ステップの増減・並列グループ・実行形態の変更はステップ定義表と実行形態表の修正だけで完結させる。**サブスキルの SKILL.md に model / effort を書かない**(frontmatter の model 上書きは静的で、そのターンの残り全体に残るため fixed と両立しない)。effort の器は `assets/agents/dev-effort-*.md` の 5 段階だけで、値の割り当ては実行形態表が持つ
+- mode に応じた質問頻度を守る。セットアップ質問(セッションモデルの確認を含む)・tier 確定時の確認(normal)・チェックポイント停止・ループ上限到達時の報告・DoD 未充足かつループ上限到達時の報告は mode の適用対象外(必ず行う)
+- ステップの増減・並列グループ・実行形態の変更はステップ定義表と実行形態表の修正だけで完結させる。**サブスキルの SKILL.md に model / effort を書かない**(frontmatter の model 上書きは静的で、そのターンの残り全体に残るため fixed と両立しない)。model と effort の器は `assets/agents/dev-{opus,fable}-*.md` の 10 定義だけで、値の割り当ては実行形態表が持つ。**Opus 5 に解決されうるエイリアス起動(`model: opus`)はどこにも書かない**
 - サブスキル間の成果物規約(必須セクション・フォーマット)は各サブスキルの SKILL.md が定義する。dev は **成果物パスの受け渡し・実行順序・実行形態(model)・HTML 成果物のオープン・ループ・状態管理** にのみ責務を持つ
 - subagent の結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行(Skill ツールで本会話内)に切り替える(セッションの model / effort で動くことになるが、止まるよりよい。dev-state.json の `models` に `inline` と記録する)

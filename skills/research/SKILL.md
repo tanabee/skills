@@ -45,7 +45,7 @@ GitHub issue ( $ARGUMENTS ) に対して、実装に着手する前の技術調�
 
 ### 調査の並列化
 
-step 6(影響範囲)・step 7(リファレンス)・step 8(盲点候補)は互いに独立した調査なので、コードベースが大きい場合は Agent ツール(`general-purpose` / `Explore`)で**並列に実行してよい**。Agent の model / effort は tier で決める: `M` → `opus/low`、`L` / `XL` → `opus/medium`、`fixed:<model>[/<effort>]` → その値、省略時 → `opus/low`(grep と要約が仕事で、本スキルより判断力を要しない)。`subagent_type` は `dev-effort-<effort>`(`/dev` が `~/.claude/agents/` に置く定義。無い・effort 省略時は `general-purpose`)、`model` 引数に model を渡す。各エージェントには調査対象・観点・返してほしい形式(ファイルパスと根拠)を明示して依頼し、結果を本スキルで統合する。小規模なら inline で順に行って構わない。依頼時には「検索は Grep ツールまたは `git grep` / `rg` を使い、Bash の `grep -r` / `find <dir>` は使わない(gitignore された `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになる)」を制約として含める。
+step 6(影響範囲)・step 7(リファレンス)・step 8(盲点候補)は互いに独立した調査なので、コードベースが大きい場合は Agent ツール(`general-purpose` / `Explore`)で**並列に実行してよい**。Agent の model / effort は tier で決める: `M` → `opus/low`、`L` / `XL` → `opus/medium`、`fixed:<model>[/<effort>]` → その値、省略時 → `opus/low`(grep と要約が仕事で、本スキルより判断力を要しない)。`subagent_type` は `dev-<model>-<effort>`(`/dev` が `~/.claude/agents/` に置く、model をフル ID で固定した定義。`model` 引数は渡さない — エイリアス `opus` は環境により Opus 5 に解決されるため)。定義が無い場合は Opus 5 に落ちうる `general-purpose` + `model` で代替せず、並列化を諦めて inline で順に調査する。各エージェントには調査対象・観点・返してほしい形式(ファイルパスと根拠)を明示して依頼し、結果を本スキルで統合する。小規模なら inline で順に行って構わない。依頼時には「検索は Grep ツールまたは `git grep` / `rg` を使い、Bash の `grep -r` / `find <dir>` は使わない(gitignore された `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになる)」を制約として含める。
 
 ### 出力(md + html の 2 種生成)
 

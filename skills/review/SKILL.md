@@ -93,9 +93,9 @@ PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.
 
 **1 メッセージ内で 2 つのレビューを並列発行する**（逐次実行しない）。
 
-#### 4-A. Claude Code レビュー（Agent ツールで `dev-effort-<effort>` を起動）
+#### 4-A. Claude Code レビュー（Agent ツールで `dev-<model>-<effort>` を起動）
 
-Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opus/medium`、`M` → `opus/high`、`L` / `XL` → `fable/xhigh`、`fixed:<model>[/<effort>]` → その値、tier 省略時 → `fable/xhigh`（must 指摘の精度がループ回数に直結するため、指定が無ければ高い方に倒す）。`subagent_type` は `dev-effort-<effort>`（`/dev` が `~/.claude/agents/` に置く定義。無い・effort 省略時は `general-purpose`）、`model` 引数に model を渡す。**`S` では観点を「正確性」「副作用 / 影響範囲」の 2 つに絞る**（`<review-perspectives>` にその 2 行だけ転記し、プロンプトの「全観点」を「この 2 観点」に読み替える）。プロンプトは以下:
+Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opus/medium`、`M` → `opus/high`、`L` / `XL` → `fable/xhigh`、`fixed:<model>[/<effort>]` → その値、tier 省略時 → `fable/xhigh`（must 指摘の精度がループ回数に直結するため、指定が無ければ高い方に倒す）。`subagent_type` は `dev-<model>-<effort>`（`/dev` が `~/.claude/agents/` に置く、model をフル ID で固定した定義。`model` 引数は渡さない — エイリアス `opus` は環境により Opus 5 に解決されるため）。定義が無い場合は Opus 5 に落ちうる `general-purpose` + `model` で代替せず、Claude レビューをスキップして Codex のみで進め、review.md にその旨を明記する。**`S` では観点を「正確性」「副作用 / 影響範囲」の 2 つに絞る**（`<review-perspectives>` にその 2 行だけ転記し、プロンプトの「全観点」を「この 2 観点」に読み替える）。プロンプトは以下:
 
 ```
 あなたはコードレビュアーです。以下の入力ファイルを Read してから、全観点を網羅したレビューを実施し、結果を output-path に HTML で Write してください。

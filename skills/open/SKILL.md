@@ -1,6 +1,6 @@
 ---
 name: open
-description: 指定されたファイルやフォルダを種別に応じた最適なアプリで開くスキル。Markdown (.md) は grip で GitHub 風にレンダリングしてブラウザ表示、HTML はブラウザ表示 (config でテスト用ブラウザ・プロファイルを指定。未設定なら初回に質問して保存)、フォルダは `open` で Finder 表示、その他は Antigravity IDE で開く。ユーザーが「このファイル開いて」「〜をブラウザで見たい」「〜をプレビューして」などファイルやフォルダを開く・見る・表示する意図を示したら必ず使用する。
+description: 指定されたファイルやフォルダを種別に応じた最適なアプリで開くスキル。Markdown (.md) は grip で GitHub 風にレンダリングしてブラウザ表示、HTML はブラウザ表示 (config でテスト用ブラウザ・プロファイルを指定。未設定なら初回に質問して保存。同じ URL のタブが開いていれば新規タブを増やさずリロード)、フォルダは `open` で Finder 表示、その他は Antigravity IDE で開く。ユーザーが「このファイル開いて」「〜をブラウザで見たい」「〜をプレビューして」などファイルやフォルダを開く・見る・表示する意図を示したら必ず使用する。
 allowed-tools: Bash, AskUserQuestion
 ---
 
@@ -30,6 +30,8 @@ allowed-tools: Bash, AskUserQuestion
     "command": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "args": [
       "--user-data-dir=/Users/<me>/.cache/chrome-devtools-mcp/profiles/<project>-artifacts",
+      "--remote-debugging-port=0",
+      "--allow-file-access-from-files",
       "--no-first-run",
       "--no-default-browser-check"
     ]
@@ -39,27 +41,34 @@ allowed-tools: Bash, AskUserQuestion
 
 - `command`: ブラウザの実行ファイル。`open -a` は起動済みアプリに引数を渡せないため、バイナリを直接指定する
 - `args`: 起動引数。`--user-data-dir` をメインブラウザと別にすると、メインの Chrome が起動中でも独立インスタンスとして立ち上がり、成果物のタブがメインブラウザに混ざらない (同じ dir への 2 回目以降の呼び出しは既存インスタンスにタブ追加される)。`~` は展開されないので絶対パスで書く
+- `--remote-debugging-port=0`: 「既存タブがあればリロード」(下記「開き方」)に必要。**ポートは必ず `0`**(OS が空きポートを割り当て、Chrome が `<user-data-dir>/DevToolsActivePort` に書く)。固定ポートにすると、別 repo の `/dev` を並列実行したとき後から起動した Chrome がポートを取れず、`/open` が別 repo の Chrome にタブを開いてしまう。専用 `--user-data-dir` でのみ有効 (Chrome 136+ は既定プロファイルではこのフラグを無視する)
+- `--allow-file-access-from-files`: `/dev` のビューア (`dev/assets/viewer.html`) が同じディレクトリの成果物を `file://` 同士で fetch するために必要。ローカル HTML が他のローカルファイルを読める状態になるので、**成果物閲覧専用のプロファイルにだけ付け、普段使いの Chrome には付けない**
 - デフォルトブラウザを使う場合は `"browser": "default"` と書く
 
-### 未設定時: 質問して保存する (黙ってフォールバックしない)
+### 既存 config の移行
 
-どちらにも `browser` が無い場合、**AskUserQuestion で開き方を確認し、回答を config に保存してから開く**。保存先はプロジェクト (git root) の config。git 管理外なら ユーザーの config。以降の呼び出しは保存した設定を使うので、質問は初回の 1 回だけになる。
-
-選択肢:
-
-- **テスト用 Chrome プロファイルで開く (推奨)**: 上記例の形で保存する。`--user-data-dir` は `~/.cache/chrome-devtools-mcp/profiles/<プロジェクト名>-artifacts` を既定にし、既存プロファイル (`ls ~/.cache/chrome-devtools-mcp/profiles`) があれば選択肢に加える
-- **デフォルトブラウザで開く**: `{"browser": "default"}` を保存する
-
-ユーザーがその場で開き方を明示した場合 (「デフォルトブラウザで開いて」等) は質問せずそれに従い、config は変更しない。
+`browser` がオブジェクトで、`args` に `--remote-debugging-port=0` または `--allow-file-access-from-files` が無い場合は、**この 2 つを `args` に足して(`--remote-debugging-port=<固定値>` があれば `0` に書き換えて)保存してから開く**(質問はしない)。追記した旨と、その `--user-data-dir` で既に起動している Chrome があれば「一度終了すると以降は既存タブのリロードになる」ことを 1 行で伝える。
 
 ### 開き方
 
 - `browser` が `"default"`: `open <path or URL>`
-- `browser` がオブジェクト (ファイルは `file://` URL にする):
+- `browser` がオブジェクト (ファイルは `file://` URL にする): **同じ URL のタブが既に開いていればリロード、無ければ新規タブ**。`args` の `--user-data-dir=<dir>` を読み、以下の順で試す
 
 ```bash
-nohup "<command>" <args...> "<file://absolute-path または URL>" >/dev/null 2>&1 &
+CDP="<このスキルのディレクトリ>/assets/cdp.mjs"   # SKILL.md と同じ階層の assets/
+URL="file://<absolute-path>"                      # #fragment 付きでもよい
+if node "$CDP" "<user-data-dir>" open "$URL"; then
+  :                                              # 同 URL → 前面化してリロード / ハッシュだけ違う → ハッシュ遷移 / 無し → 新規タブ
+elif pgrep -f -- "--user-data-dir=<user-data-dir>" >/dev/null; then
+  nohup "<command>" <args...> "$URL" >/dev/null 2>&1 &   # 旧引数で起動中: 新規タブで妥協し、「その Chrome を一度終了すると次回からリロードになる」と伝える
+else
+  nohup "<command>" <args...> "$URL" >/dev/null 2>&1 &   # 未起動: 初回起動 (Chrome が DevToolsActivePort を書き、以降は接続できる)
+fi
 ```
+
+- `cdp.mjs` は `<user-data-dir>/DevToolsActivePort` からポートを読んで接続する (Node 22+ 標準の WebSocket だけで動く。依存なし)。接続できなければ終了コード 2 を返す (未起動、または前回起動時のファイルの残骸)。`node cdp.mjs <user-data-dir> list` でタブ一覧を確認できる
+- 同じ HTML を何度開き直しても (例: `/dev` のループで plan.html が再生成される場合) タブは増えない。ハッシュだけ違う URL (`viewer.html#plan` → `#report`) はリロードせずページ内遷移になる
+- **別 repo の `/dev` を並列実行する場合**: repo ごとに `--user-data-dir` を分ける (既定の `<プロジェクト名>-artifacts` で分かれる)。ポートはプロファイルごとに自動割当なので衝突せず、`/open` は自分の repo の Chrome だけを操作する。複数 repo で同じプロファイルを共用すると同じウィンドウにタブが並ぶが、URL が成果物ディレクトリを含むため取り違えは起きない
 
 ## Markdown: grip
 

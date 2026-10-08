@@ -31,7 +31,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | notify-discord | `/notify-discord <メッセージ>` | Discord Webhook でメッセージを送信（初回は webhook URL を保存） |
 | nanobanana | `/nanobanana <プロンプト> [--model flash\|pro] [--aspect 16:9] [--size 1K]` | Gemini の画像生成モデル (nanobanana) で画像生成し `tmp/images/` に保存。`GEMINI_API_KEY` 必須 |
 | prototype | `/prototype [アイデア]` | アイデアの壁打ち（発散→収束）から、スタック選定・実装・動作確認・デモ整備・フィードバックループまで一気通貫でプロトタイプを作る |
-| open | `/open <path>` | ファイルやフォルダを種別に応じて開き分ける（`.md` は grip でブラウザ表示、`.html` はブラウザ表示、フォルダは Finder、その他は Antigravity IDE）。ブラウザは `.agents/skills-config/open/config.json` でテスト用 Chrome プロファイル等を指定。未設定なら初回に質問して保存 |
+| open | `/open <path>` | ファイルやフォルダを種別に応じて開き分ける（`.md` は grip でブラウザ表示、`.html` はブラウザ表示、フォルダは Finder、その他は Antigravity IDE）。ブラウザは `.agents/skills-config/open/config.json` でテスト用 Chrome プロファイル等を指定。未設定なら初回に質問して保存。同じ URL のタブが開いていればタブを増やさずリロード（CDP 経由） |
 | copy | `/copy <path\|text>` | ファイルの中身・テキスト・会話中の直前の出力をクリップボードにコピー（画像は osascript で画像としてコピー） |
 | export | `/export [html\|md] [出力先]` | 会話で直近に調べた・生成した内容を HTML / Markdown ファイルに書き出す（未指定なら html で `tmp/` に保存）。出力後は open スキルのルールで自動的に開く |
 
@@ -56,6 +56,8 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 - `review.md` / `.html` - コードレビュー結果
 - `quiz.html` - 変更内容の解説と理解確認クイズ
 - `screenshots/` - `/test` のスクリーンショット（UI 変更がある場合は `before/`・`after/` と前後比較ビューア `compare.html` を含む）
+
+`/dev` は成果物ごとにタブを開かず、`dev/assets/viewer.html`（左に成果物一覧、右に表示。生成・更新を自動検知してリロード）を issue ごとに 1 タブだけ開きます。
 
 主要な成果物は **md（正・スキル間の伝達用）と HTML（人間レビュー用ビュー）の 2 種**で生成されます。HTML は AC カバレッジ表・TDD フェーズの色分け・Mermaid によるフローチャートやアーキテクチャ図など、Markdown では実現困難なリッチ表現で構造を立体的に伝えるためのものです。
 

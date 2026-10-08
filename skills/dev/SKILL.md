@@ -122,6 +122,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 ```json
 {
   "issue": 123,
+  "issue_url": "https://github.com/<owner>/<repo>/issues/123",
   "mode": "normal",
   "tier": "M",
   "tier_source": "jev",
@@ -131,6 +132,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
   "agents_ready": true,
   "session_model": "claude-opus-5-5[1m]",
   "models": { "triage-initial": "opus/medium", "research": "opus/high", "plan": "fable/high" },
+  "timings": { "research": { "started": "2026-10-08T10:00:00+09:00", "finished": "2026-10-08T10:12:30+09:00" } },
   "agents": { "research": "<agentId>" },
   "loops": { "review_plan": 0, "test_inner": 0, "test_outer": 0, "review": 0 },
   "test_failures": [["[AC2] 不正なメールでエラー"], ["[AC2] 不正なメールでエラー"]],
@@ -138,13 +140,34 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 }
 ```
 
+- `issue_url` はセットアップ時に `gh issue view <issue> --json url -q .url` で取得して記録する(ビューアがリンクにする。取得できなければ省略)
 - `skips` は tier から導出した結果(自動スキップ含む)の記録。人が選ぶ項目ではない
 - `fixed` は `fixed:` 指定時のみ `{ "model": "opus", "effort": "high" }`
-- `models` は各ステップを実際に起動した `<model>/<effort>` の記録。`agents` は質問リレーの再開に使う agentId(ステップ完了時に消してよい)
+- `models` は各ステップを実際に起動した `<model>/<effort>` の記録(ループで再実行しても同じ model なら上書きでよい)。`timings` はステップの開始・完了時刻(ISO 8601)。どちらもビューアの dashboard が表示する。`agents` は質問リレーの再開に使う agentId(ステップ完了時に消してよい)
 - `agents_ready` は `dev-<model>-<effort>` 定義で起動できたか(false なら停止している。fallback は無い)
 - `session_model` は dev 本体が動いているモデル。Fable のまま続行した run を後から集計で見分けるために記録する
 - `loops.test_inner` は外側に出るたび 0 にリセットする。`test_failures` は内側の各ラウンドで失敗した checklist 項目名の配列(早期エスカレーション判定に使う。外側に出たらクリアする)
 - `/dev` 開始時に同 issue の dev-state.json が既に存在する場合は内容を読み、未完了の最初のステップからの再開をユーザーに提案する(auto では自動で再開)。tier は記録済みの値を使う
+
+## 成果物ビューア(1 タブで全成果物を見る)
+
+ステップごとに html を別タブで開くと、ループの再生成も含めてタブが増え続ける。代わりに本スキルの `assets/viewer.html`(左に成果物一覧、右に iframe)を **issue ごとに 1 タブだけ** 開き、以降はそのタブを使い回す。
+
+- **URL**: `file://<本スキルの assets/viewer.html の絶対パス>?dir=file://<成果物ディレクトリの絶対パス>/#<page>`(`dir` は末尾 `/` 付き。viewer.html は成果物ディレクトリにコピーしない)
+- **開くタイミング**: dev-state.json を書き出した直後(セットアップ完了時)に `/open <URL>#dashboard` で 1 回開く。以降は各ステップ完了後に `#<page>` 付きで `/open` を呼ぶだけでよい。`/open` は同 URL のタブがあればリロード、ハッシュ違いならページ内遷移にするので(open スキルの「開き方」)、タブは増えない
+- **ビューアの挙動**: 先頭の `dashboard` は dev-state.json を描画したページ(進捗バー・ステップ表・ループ・DoD)。3 秒ごとに `dev-state.json` と各 html を fetch し、未生成はグレー、更新ありは黄、進行中ステップ(`steps` が completed / skipped 以外)は紫で表示する。表示中ページが更新されるとスクロール位置を保ってリロードする。open スキルの config に `--allow-file-access-from-files` が必要(open スキルが自動で追記する)
+- `/open` が `"browser": "default"` の場合も同じ URL を開くが、既定ブラウザでは `file://` の fetch が効かないため一覧がグレーのままになる。その場合は従来どおり個別 html を `/open` で開く(dev-state.json に `viewer: false` を記録)
+
+| ステップ | page | 備考 |
+|---|---|---|
+| (セットアップ完了時) | `dashboard` | dev-state.json から進捗・各ステップの model / effort・所要時間・ループ回数・DoD を表示(自動更新) |
+| research | `research` | |
+| plan | `plan` | checklist.html も同時生成されるが plan を表示 |
+| review-plan | `review-plan` | |
+| implement | `report` | |
+| test | `checklist` | compare.html があれば `compare` |
+| review | `review` | review-claude / review-codex / context は一覧に出さない(中間成果物) |
+| quiz | `quiz` | |
 
 ## 作業ブランチの準備
 
@@ -178,7 +201,7 @@ tier 確定後(tier 引数指定時はセットアップ直後、それ以外は
    - サブスキル側に fallback があればそれに委ねる
    - fallback が無い場合 — `auto`: 警告を dev-state.json に記録し、続行可能なら続行、不可能ならそのステップもスキップ扱いにする。`normal`: ユーザーに続行可否を確認する
 3. **実行**: 実行形態表に従って Agent ツールで起動する(`subagent_type: dev-<model>-<effort>`。後述「agent ステップの依頼形式」)。normal で `status: needs-input` が返ったら「質問リレー」で回答を戻して再開する
-4. **HTML 成果物のオープン**: そのステップが生成・更新した `.html` のうち、表の「主な成果物」に挙げたものだけを Skill ツールで `/open <絶対パス>` を呼んで開く(review の `review-claude.html` / `review-codex.html` / `context.html` のような中間成果物は開かない)。agent ステップの成果物も完了確認後に dev 側で開く。ループでの再生成・更新時も毎回開き直す
+4. **ビューアの切り替え**: 個別の `.html` は開かない。ステップ完了後に Skill ツールで `/open <ビューア URL>#<page>` を呼び、「成果物ビューア」の該当ページに切り替える(page はステップ → page 表のとおり。ループでの再生成・更新時も同様。ビューアは変更を自動検知して表示中ページをリロードするので、切り替え以外の操作は不要)
 5. **チェックポイント判定**: 指定されていれば停止する(「チェックポイント停止の挙動」参照)
 
 ### mode の挙動
@@ -322,6 +345,7 @@ review ループを抜けたら、グループ B に進む前に plan.md の「�
 ## 注意事項
 
 - mode に応じた質問頻度を守る。セットアップ質問(セッションモデルの確認を含む)・tier 確定時の確認(normal)・チェックポイント停止・ループ上限到達時の報告・DoD 未充足かつループ上限到達時の報告は mode の適用対象外(必ず行う)
+- 成果物 html を増やす場合は `assets/viewer.html` の `PAGES` と「成果物ビューア」の表に 1 行ずつ足す
 - ステップの増減・並列グループ・実行形態の変更はステップ定義表と実行形態表の修正だけで完結させる。**サブスキルの SKILL.md に model / effort を書かない**(frontmatter の model 上書きは静的で、そのターンの残り全体に残るため fixed と両立しない)。model と effort の器は `assets/agents/dev-{opus,fable}-*.md` の 10 定義だけで、値の割り当ては実行形態表が持つ。**Opus 5 に解決されうるエイリアス起動(`model: opus`)はどこにも書かない**
 - サブスキル間の成果物規約(必須セクション・フォーマット)は各サブスキルの SKILL.md が定義する。dev は **成果物パスの受け渡し・実行順序・実行形態(model)・HTML 成果物のオープン・ループ・状態管理** にのみ責務を持つ
 - subagent の結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行(Skill ツールで本会話内)に切り替える(セッションの model / effort で動くことになるが、止まるよりよい。dev-state.json の `models` に `inline` と記録する)

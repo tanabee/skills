@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dev viewer</title>
+<!-- /dev の成果物ビューア。使い方: viewer.html?dir=file:///abs/path/tmp/issues/<issue>/#<page>  (Chrome を --allow-file-access-from-files 付きで起動すること) -->
+<style>
+  :root { --bg:#f6f8fa; --panel:#fff; --text:#1f2328; --muted:#656d76; --accent:#0969da; --border:#d0d7de;
+          --ok:#1a7f37; --new:#bf8700; --miss:#c9d1d9; --run:#8250df; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --border:#30363d; --miss:#30363d; } }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; }
+  body { display:flex; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; font-size:13px; }
+  nav { width:220px; flex:none; display:flex; flex-direction:column; background:var(--panel); border-right:1px solid var(--border); }
+  nav header { padding:12px 14px; border-bottom:1px solid var(--border); }
+  nav header h1 { margin:0; font-size:14px; }
+  nav header .meta { color:var(--muted); font-size:11px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  nav ul { list-style:none; margin:0; padding:6px 0; flex:1; overflow:auto; }
+  nav li { display:flex; align-items:center; gap:8px; padding:7px 14px; cursor:pointer; border-left:3px solid transparent; }
+  nav li:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
+  nav li.active { border-left-color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); font-weight:600; }
+  nav li.missing { color:var(--muted); cursor:default; }
+  nav li .dot { width:8px; height:8px; border-radius:50%; background:var(--miss); flex:none; }
+  nav li.present .dot { background:var(--ok); }
+  nav li.updated .dot { background:var(--new); box-shadow:0 0 0 3px color-mix(in srgb, var(--new) 30%, transparent); }
+  nav li.running .dot { background:var(--run); animation:pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity:.3; } }
+  nav li .step { color:var(--muted); font-size:11px; margin-left:auto; }
+  nav footer { padding:8px 14px; border-top:1px solid var(--border); color:var(--muted); font-size:11px; display:flex; gap:8px; align-items:center; }
+  nav footer label { display:flex; gap:4px; align-items:center; cursor:pointer; }
+  main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  main .bar { height:34px; flex:none; display:flex; align-items:center; gap:10px; padding:0 12px; background:var(--panel); border-bottom:1px solid var(--border); color:var(--muted); font-size:12px; }
+  main .bar b { color:var(--text); }
+  main .bar a { color:var(--accent); text-decoration:none; margin-left:auto; }
+  iframe { flex:1; border:0; width:100%; background:#fff; }
+  .empty { flex:1; display:grid; place-items:center; color:var(--muted); }
+  #dash { flex:1; overflow:auto; padding:20px 24px; }
+  #dash[hidden] { display:none; }
+  #dash h2 { font-size:15px; margin:22px 0 8px; }
+  #dash h2:first-child { margin-top:0; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+  .card .k { color:var(--muted); font-size:11px; }
+  .card .v { font-size:15px; font-weight:600; margin-top:2px; word-break:break-all; }
+  .progress { height:8px; background:var(--border); border-radius:4px; overflow:hidden; margin:10px 0 4px; }
+  .progress i { display:block; height:100%; background:var(--ok); }
+  table.t { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  table.t th, table.t td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  table.t th { color:var(--muted); font-weight:500; font-size:11px; }
+  table.t tr:last-child td { border-bottom:0; }
+  .badge { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; }
+  .b-done { background:color-mix(in srgb, var(--ok) 18%, transparent); color:var(--ok); }
+  .b-skip { background:color-mix(in srgb, var(--muted) 18%, transparent); color:var(--muted); }
+  .b-run  { background:color-mix(in srgb, var(--run) 18%, transparent); color:var(--run); }
+  .b-todo { color:var(--muted); }
+  .b-fail { background:color-mix(in srgb, #cf222e 18%, transparent); color:#cf222e; }
+  .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+  .muted { color:var(--muted); }
+  .note { font-size:12px; color:var(--muted); }
+  a.issue { color:var(--accent); text-decoration:none; }
+  a.issue:hover { text-decoration:underline; }
+  .empty[hidden] { display:none; }
+</style>
+</head>
+<body>
+<nav>
+  <header><h1 id="title">dev viewer</h1><div class="meta" id="meta"></div></header>
+  <ul id="list"></ul>
+  <footer><label><input type="checkbox" id="auto" checked> 自動更新</label><span id="status"></span></footer>
+</nav>
+<main>
+  <div class="bar"><span>表示中:</span><b id="cur">—</b><span id="curStep"></span><a id="raw" target="_blank">別タブで開く ↗</a></div>
+  <div id="dash" hidden></div>
+  <iframe id="frame" hidden></iframe>
+  <div class="empty" id="empty">左の一覧から成果物を選択</div>
+</main>
+<script>
+const PAGES = [
+  { key:'dashboard',   label:'dashboard',   file:null,                       step:null },
+  { key:'research',    label:'research',    file:'research.html',            step:'research' },
+  { key:'plan',        label:'plan',        file:'plan.html',                step:'plan' },
+  { key:'checklist',   label:'checklist',   file:'checklist.html',           step:'plan' },
+  { key:'review-plan', label:'review-plan', file:'review-plan.html',         step:'review-plan' },
+  { key:'report',      label:'report',      file:'report.html',              step:'implement' },
+  { key:'compare',     label:'compare',     file:'screenshots/compare.html', step:'test' },
+  { key:'review',      label:'review',      file:'review.html',              step:'review' },
+  { key:'quiz',        label:'quiz',        file:'quiz.html',                step:'quiz' },
+];
+const params = new URLSearchParams(location.search);
+let dir = params.get('dir') || new URL('.', location.href).href;   // 同じディレクトリに置けば ?dir= 不要
+if (!dir.endsWith('/')) dir += '/';
+const state = { hashes:{}, seen:{}, current:null, devState:null };
+const $ = id => document.getElementById(id);
+const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i); return h >>> 0; };
+window.__viewer = state;
+
+async function probe(file) {
+  try { const r = await fetch(dir + file, { cache:'no-store' }); if (!r.ok) return null; return hash(await r.text()); }
+  catch { return null; }
+}
+async function poll() {
+  try { const r = await fetch(dir + 'dev-state.json', { cache:'no-store' }); state.devState = r.ok ? await r.json() : null; } catch { state.devState = null; }
+  const results = await Promise.all(PAGES.map(p => p.file ? probe(p.file) : Promise.resolve(state.devState ? hash(JSON.stringify(state.devState)) : null)));
+  let changedCurrent = false;
+  PAGES.forEach((p, i) => {
+    const h = results[i];
+    if (h !== null && state.hashes[p.key] !== undefined && state.hashes[p.key] !== h) { state.seen[p.key] = false; if (state.current === p.key) changedCurrent = true; }
+    state.hashes[p.key] = h;
+  });
+  render();
+  if (changedCurrent && $('auto').checked) { if (state.current === 'dashboard') { renderDash(); state.seen.dashboard = true; } else reloadFrame(); }
+  $('status').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+function stepStatus(step) {
+  const s = step && state.devState?.steps?.[step]; if (!s) return '';
+  return s.startsWith('completed') ? 'done' : s.startsWith('skipped') ? 'skip' : s;
+}
+function render() {
+  const ds = state.devState;
+  if (ds) { $('title').innerHTML = issueLink(ds, `issue #${esc(ds.issue)}`); $('meta').textContent = [ds.tier, ds.mode, ds.status].filter(Boolean).join(' / '); }
+  else { $('title').textContent = decodeURIComponent(dir.split('/').filter(Boolean).pop() || 'dev viewer'); $('meta').textContent = 'dev-state.json なし'; }
+  const nothing = PAGES.every(p => state.hashes[p.key] == null);
+  $('empty').textContent = nothing && !ds ? '成果物を読めません。?dir= のパスと、Chrome を --allow-file-access-from-files 付きで起動しているか確認してください' : '左の一覧から成果物を選択';
+  $('list').innerHTML = '';
+  for (const p of PAGES) {
+    const li = document.createElement('li');
+    const present = state.hashes[p.key] !== null && state.hashes[p.key] !== undefined;
+    const st = stepStatus(p.step);
+    li.className = [present ? 'present' : 'missing', present && state.seen[p.key] === false ? 'updated' : '', st && st !== 'done' && st !== 'skip' ? 'running' : '', state.current === p.key ? 'active' : ''].join(' ');
+    li.innerHTML = `<span class="dot"></span><span>${p.label}</span><span class="step">${st}</span>`;
+    if (present) li.onclick = () => show(p.key);
+    $('list').appendChild(li);
+  }
+}
+function show(key) {
+  const p = PAGES.find(x => x.key === key); if (!p) return;
+  state.current = key; state.seen[key] = true;
+  location.hash = key;
+  $('empty').hidden = true;
+  if (!p.file) { $('frame').hidden = true; $('dash').hidden = false; $('raw').hidden = true; $('cur').textContent = 'dev-state.json'; $('curStep').textContent = ''; renderDash(); render(); return; }
+  $('frame').hidden = false; $('dash').hidden = true; $('raw').hidden = false;
+  $('frame').src = dir + p.file; $('raw').href = dir + p.file;
+  $('cur').textContent = p.file; $('curStep').textContent = stepStatus(p.step) ? `(${p.step}: ${stepStatus(p.step)})` : '';
+  render();
+}
+const STEPS = ['triage-initial','research','triage-confirm','plan','triage-promote','review-plan','capture-before','implement','create-pr-text','test','review','quiz','notify-discord'];
+const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const issueLink = (ds, text) => ds.issue_url ? `<a class="issue" href="${esc(ds.issue_url)}" target="_blank" rel="noopener">${text}</a>` : text;
+const badge = st => {
+  if (!st) return '<span class="badge b-todo">—</span>';
+  const cls = st.startsWith('completed') ? 'b-done' : st.startsWith('skipped') ? 'b-skip' : /fail|error|needs/.test(st) ? 'b-fail' : 'b-run';
+  const head = st.split(' ')[0], rest = st.slice(head.length).trim();
+  return `<span class="badge ${cls}">${esc(head)}</span>${rest ? ` <span class="note">${esc(rest)}</span>` : ''}`;
+};
+const fmtDur = ms => ms < 60000 ? `${Math.round(ms/1000)}s` : ms < 3600000 ? `${Math.floor(ms/60000)}m${Math.round(ms%60000/1000).toString().padStart(2,'0')}s` : `${Math.floor(ms/3600000)}h${Math.floor(ms%3600000/60000).toString().padStart(2,'0')}m`;
+const dur = t => { if (!t?.started) return ''; const end = t.finished ? new Date(t.finished) : new Date(); const d = fmtDur(end - new Date(t.started)); return t.finished ? d : `${d}…`; };
+function renderDash() {
+  const ds = state.devState; if (!ds) { $('dash').innerHTML = '<p class="note">dev-state.json がありません</p>'; return; }
+  const steps = ds.steps ?? {}, models = ds.models ?? {}, timings = ds.timings ?? {}, loops = ds.loops ?? {};
+  const done = STEPS.filter(k => /^(completed|skipped)/.test(steps[k] ?? '')).length;
+  const running = STEPS.find(k => steps[k] && !/^(completed|skipped)/.test(steps[k]));
+  const cards = [
+    ['issue', issueLink(ds, `#${esc(ds.issue ?? '?')}`) + (ds.issue_url ? ` <span class="note">${esc(ds.issue_url.replace(/^https?:\/\/github\.com\//, '').replace(/\/issues\/\d+$/, ''))}</span>` : '')], ['status', ds.status ?? (running ? `running: ${running}` : '—')],
+    ['tier', `${ds.tier ?? '—'}${ds.tier_source ? ` <span class="note">(${esc(ds.tier_source)})</span>` : ''}${ds.fixed ? ` <span class="note">fixed ${esc(ds.fixed.model)}/${esc(ds.fixed.effort)}</span>` : ''}`],
+    ['mode', ds.mode ?? '—'], ['session model', `<span class="mono">${esc(ds.session_model ?? '—')}</span>`],
+    ['agents', ds.agents_ready === false ? '<span class="badge b-fail">not ready</span>' : ds.agents_ready ? '<span class="badge b-done">ready</span>' : '—'],
+  ].map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  const rows = STEPS.map(k => {
+    const m = models[k] ? models[k] : (steps[k]?.startsWith('skipped') ? '' : '');
+    const reason = ds.skip_reasons?.[k] ? `<span class="note">${esc(ds.skip_reasons[k])}</span>` : '';
+    return `<tr><td class="mono">${k}</td><td>${badge(steps[k])}</td><td class="mono">${esc(m) || '<span class="muted">—</span>'}</td><td class="mono">${dur(timings[k]) || '<span class="muted">—</span>'}</td><td>${reason}</td></tr>`;
+  }).join('');
+  const loopRows = Object.entries(loops).map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+  const fails = (ds.test_failures ?? []).map((r, i) => `<tr><td>round ${i+1}</td><td>${r.map(esc).join('<br>')}</td></tr>`).join('');
+  const dod = Object.entries(ds.dod ?? {}).map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+  const extra = [['direction', ds.direction], ['checkpoints', (ds.checkpoints ?? []).join(', ')], ['effort_advised', ds.effort_advised],
+    ['triage_confirm', ds.triage_confirm_result && `${ds.triage_confirm_result.tier} (${ds.triage_confirm_result.source}) ${ds.triage_confirm_result.note ?? ''}`]]
+    .filter(([, v]) => v).map(([k, v]) => `<tr><td class="mono">${k}</td><td>${esc(v)}</td></tr>`).join('');
+  $('dash').innerHTML = `
+    <h2>進捗 <span class="note">${done} / ${STEPS.length} ステップ${running ? ` · 実行中: ${esc(running)}` : ''}</span></h2>
+    <div class="progress"><i style="width:${Math.round(done / STEPS.length * 100)}%"></i></div>
+    <div class="cards" style="margin-top:12px">${cards}</div>
+    <h2>ステップ <span class="note">model / effort は実際に起動した値(dev-state.json の models)</span></h2>
+    <table class="t"><tr><th>step</th><th>status</th><th>model / effort</th><th>所要</th><th>備考</th></tr>${rows}</table>
+    ${loopRows ? `<h2>ループ</h2><table class="t"><tr><th>loop</th><th>回数</th></tr>${loopRows}</table>` : ''}
+    ${fails ? `<h2>test 失敗項目</h2><table class="t"><tr><th>round</th><th>項目</th></tr>${fails}</table>` : ''}
+    ${dod ? `<h2>DoD</h2><table class="t"><tr><th>項目</th><th>判定</th></tr>${dod}</table>` : ''}
+    ${extra ? `<h2>その他</h2><table class="t">${extra}</table>` : ''}`;
+}
+function reloadFrame() {
+  const f = $('frame'); let y = 0;
+  try { y = f.contentWindow.scrollY; } catch {}
+  f.onload = () => { try { f.contentWindow.scrollTo(0, y); } catch {} f.onload = null; state.seen[state.current] = true; render(); };
+  f.contentWindow.location.reload();
+}
+window.addEventListener('hashchange', () => { const k = location.hash.slice(1); if (k && k !== state.current && state.hashes[k] != null) show(k); });
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || !['j','k'].includes(e.key)) return;
+  const avail = PAGES.filter(p => state.hashes[p.key] != null); const i = avail.findIndex(p => p.key === state.current);
+  const n = avail[(i + (e.key === 'j' ? 1 : -1) + avail.length) % avail.length]; if (n) show(n.key);
+});
+(async () => {
+  await poll();
+  const want = location.hash.slice(1);
+  const first = PAGES.find(p => p.key === want && state.hashes[want] != null) || (state.devState ? PAGES[0] : [...PAGES].reverse().find(p => state.hashes[p.key] != null));
+  if (first) show(first.key);
+  setInterval(() => { if ($('auto').checked) poll(); }, 3000);
+})();
+</script>
+</body>
+</html>

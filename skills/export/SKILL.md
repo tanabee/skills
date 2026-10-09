@@ -8,7 +8,7 @@ allowed-tools: Write, Bash
 
 ## 形式と出力先
 
-- 形式未指定なら HTML。外部依存なしのセルフコンテインド HTML (CSS インライン、ライト/ダーク両対応) にする。`md` 指定時は Markdown
+- 形式未指定なら HTML。外部依存なしのセルフコンテインド HTML (CSS インライン) にする。`md` 指定時は Markdown
 - 出力先未指定ならプロジェクト root の `tmp/` に `<トピックのkebab-case>-YYYYMMDD.html|md` で保存
 - チャットの要約をそのまま貼るのではなく、見出し・表・出典 (URL があれば) を整えたドキュメントとして構成し直す
 

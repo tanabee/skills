@@ -1,22 +1,22 @@
 ---
 name: review
-description: Claude Code と Codex CLI による並列コードレビュー。親で差分・コンテキストを 1 回だけ収集し、Claude Code（全観点を一括レビュー）と Codex（`/codex-review` 経由）を並列実行、結果を統合した review.md / review.html を生成する。
+description: 本スキルを実行している AI(メインレビュアー)と Codex CLI による並列コードレビュー。親で差分・コンテキストを 1 回だけ収集し、メインレビュー（全観点を一括レビュー）と Codex（`/codex-review` 経由）を並列実行、結果を統合した review.md / review.html を生成する。
 allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 ---
 
-Claude Code と Codex CLI で並列にコードレビューを行い、結果を統合する。
+**メインレビュアー**（本スキルを実行している AI。Claude Code とは限らない）と Codex CLI で並列にコードレビューを行い、結果を統合する。実行環境が Codex の場合もメインレビュー（本スキルの観点・手順）と `/codex-review`（ネイティブレビュー）は別の独立した実行として扱う。
 
-**効率化の肝**: 差分取得・PR/Issue 情報収集・ローカル成果物読み込みは**親（本スキル本体）で 1 回だけ**実行し、`diff.patch` と `context.html` としてディスクに書き出す。Claude Code レビューを担当するエージェントはこの 2 ファイルを Read するだけで共通コンテキストを得られる。Codex 側は別レビュアーの独立視点として `/codex-review` をそのまま呼び出す。
+**効率化の肝**: 差分取得・PR/Issue 情報収集・ローカル成果物読み込みは**親（本スキル本体）で 1 回だけ**実行し、`diff.patch` と `context.html` としてディスクに書き出す。メインレビューを担当するエージェントはこの 2 ファイルを Read するだけで共通コンテキストを得られる。Codex 側は別レビュアーの独立視点として `/codex-review` をそのまま呼び出す。
 
 ## 引数
 
-`$ARGUMENTS` は `<対象> [tier]` の形式。`<対象>` は PR 番号/URL または issue 番号/URL（省略可）。`123`、`#123`、PR URL、issue URL のいずれか。`[tier]` は `/dev` から渡される難易度（`S` / `M` / `L` / `XL` / `fixed:<model>[/<effort>]`）で、Claude Code レビュアー Agent の model / effort と観点の範囲を決めるためだけに使う（手順 4-A 参照）。
+`$ARGUMENTS` は `<対象> [tier]` の形式。`<対象>` は PR 番号/URL または issue 番号/URL（省略可）。`123`、`#123`、PR URL、issue URL のいずれか。`[tier]` は `/dev` から渡される難易度（`S` / `M` / `L` / `XL` / `fixed:<model>[/<effort>]`）で、メインレビュアー Agent の model / effort と観点の範囲を決めるためだけに使う（手順 4-A 参照）。
 
 数値（`123`、`#123`）が渡された場合は、まず `gh pr view <番号>` を試みて PR が存在すれば PR モード、存在しなければ issue 番号として扱いローカルモードに入る。URL の場合は `/pull/` を含めば PR、`/issues/` を含めば issue として判定する。
 
 ## レビュー観点
 
-Claude Code・Codex 双方とも、以下の観点を網羅的に見る。複数のレビュアーが同じ観点を独立に見ることで、見落としを相互補完する。
+メインレビュアー・Codex 双方とも、以下の観点を網羅的に見る。複数のレビュアーが同じ観点を独立に見ることで、見落としを相互補完する。
 
 | 観点 | 主な確認事項 |
 |---|---|
@@ -30,7 +30,7 @@ Claude Code・Codex 双方とも、以下の観点を網羅的に見る。複数
 
 ## タスク管理（Task ツール）
 
-レビュー進行は Claude Code の **Task ツール（TaskCreate / TaskUpdate / TaskList）** で管理する。
+レビュー進行は **タスク管理ツール（TaskCreate / TaskUpdate / TaskList）** で管理する（無い環境では省く）。
 
 ### 初期化
 
@@ -39,7 +39,7 @@ Claude Code・Codex 双方とも、以下の観点を網羅的に見る。複数
 1. `prepare-output-dir` — 保存先判定と作成
 2. `collect-diff` — `diff.patch` の書き出し
 3. `collect-context` — `context.html` の書き出し
-4. `review-claude` — Claude Code レビュー（Agent 呼び出し）
+4. `review-main` — メインレビュー（Agent 呼び出し、または本会話内）
 5. `review-codex` — Codex レビュー（`/codex-review` 呼び出し）
 6. `integrate-review` — `review.md` / `review.html` への統合
 
@@ -47,7 +47,7 @@ Claude Code・Codex 双方とも、以下の観点を網羅的に見る。複数
 
 - 各ステップに入る直前に該当タスクを `TaskUpdate` で `in_progress` に変更
 - ステップが正常完了したら即座に `completed` に変更（**バッチ更新しない**）
-- 並列実行ステップ（`review-claude` と `review-codex`）は **同時に両方を `in_progress` にしてよい**。これは「同時に in_progress にできるのは 1 タスクのみ」の例外として運用する
+- 並列実行ステップ（`review-main` と `review-codex`）は **同時に両方を `in_progress` にしてよい**。これは「同時に in_progress にできるのは 1 タスクのみ」の例外として運用する
 - いずれかの並列ステップが失敗した場合は該当タスクを `cancelled` にし、もう一方の結果のみで `integrate-review` を進めるかユーザーに判断を仰ぐ
 
 ## 手順
@@ -74,7 +74,7 @@ Claude Code・Codex 双方とも、以下の観点を網羅的に見る。複数
 
 ### 3. コンテキストをファイルに書き出す（1 回だけ）
 
-PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.html` に親の `Write` ツールで **HTML** として書き出す。Claude Code レビュアーはこのファイルを Read してコンテキストを得る。
+PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.html` に親の `Write` ツールで **HTML** として書き出す。メインレビュアーはこのファイルを Read してコンテキストを得る。
 
 収集内容:
 
@@ -89,13 +89,13 @@ PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.
 
 `context.html` のフォーマットは [assets/context-template.html](./assets/context-template.html) を参照。該当しないセクション（例: ローカルモード時の PR 情報、PR モード時のローカル成果物）は省略してよい。
 
-### 4. Claude Code レビューと Codex レビューの並列実行
+### 4. メインレビューと Codex レビューの並列実行
 
 **1 メッセージ内で 2 つのレビューを並列発行する**（逐次実行しない）。
 
-#### 4-A. Claude Code レビュー（Agent ツールで `dev-<model>-<effort>` を起動）
+#### 4-A. メインレビュー（Claude Code では Agent ツールで `dev-<model>-<effort>` を起動、それ以外の環境では本会話内で実施）
 
-Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opus/medium`、`M` → `opus/high`、`L` / `XL` → `fable/xhigh`、`fixed:<model>[/<effort>]` → その値、tier 省略時 → `fable/xhigh`（must 指摘の精度がループ回数に直結するため、指定が無ければ高い方に倒す）。`subagent_type` は `dev-<model>-<effort>`（`/dev` が `~/.claude/agents/` に置く、model をフル ID で固定した定義。`model` 引数は渡さない — エイリアス `opus` は環境により Opus 5 に解決されるため）。定義が無い場合は Opus 5 に落ちうる `general-purpose` + `model` で代替せず、Claude レビューをスキップして Codex のみで進め、review.md にその旨を明記する。**`S` では観点を「正確性」「副作用 / 影響範囲」の 2 つに絞る**（`<review-perspectives>` にその 2 行だけ転記し、プロンプトの「全観点」を「この 2 観点」に読み替える）。プロンプトは以下:
+Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opus/medium`、`M` → `opus/high`、`L` / `XL` → `fable/xhigh`、`fixed:<model>[/<effort>]` → その値、tier 省略時 → `fable/xhigh`（must 指摘の精度がループ回数に直結するため、指定が無ければ高い方に倒す）。`subagent_type` は `dev-<model>-<effort>`（`/dev` が `~/.claude/agents/` に置く、model をフル ID で固定した定義。`model` 引数は渡さない — エイリアス `opus` は環境により Opus 5 に解決されるため）。定義が無い場合は Opus 5 に落ちうる `general-purpose` + `model` で代替せず、メインレビューをスキップして Codex のみで進め、review.md にその旨を明記する。**Claude Code 以外の環境（`subagent_type` を取る Agent ツールが無い）では、スキップせず本スキルを実行している AI 自身が本会話内で同じ観点・同じ出力形式でメインレビューを実施する**（Opus 5 回避の事情が無いため。tier による model / effort の切り替えは無視する）。**`S` では観点を「正確性」「副作用 / 影響範囲」の 2 つに絞る**（`<review-perspectives>` にその 2 行だけ転記し、プロンプトの「全観点」を「この 2 観点」に読み替える）。プロンプトは以下:
 
 ```
 あなたはコードレビュアーです。以下の入力ファイルを Read してから、全観点を網羅したレビューを実施し、結果を output-path に HTML で Write してください。
@@ -105,7 +105,7 @@ Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opu
 - context-path: <output-dir 絶対パス>/context.html
 
 ## 出力先
-- output-path: <output-dir 絶対パス>/review-claude.html
+- output-path: <output-dir 絶対パス>/review-main.html
 
 ## レビュー観点（全てを網羅的に見る）
 
@@ -153,34 +153,34 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 
 ### 5. 結果の統合
 
-Claude Code レビュー（`review-claude.html`）と Codex レビュー（`review-codex.html`）の両方を Read し、統合結果を `<output-dir>/review.md` に書き出す(**md が正**。`/quiz` や `/dev` はこちらを読む)。続けて同じ内容を人間用に `<output-dir>/review.html` としてレンダリングする。
+メインレビュー（`review-main.html`）と Codex レビュー（`review-codex.html`）の両方を Read し、統合結果を `<output-dir>/review.md` に書き出す(**md が正**。`/quiz` や `/dev` はこちらを読む)。続けて同じ内容を人間用に `<output-dir>/review.html` としてレンダリングする。
 
 統合時のルール:
 
 - **概要**: PR / Issue の概要と変更の骨子（`context.html` を参照）
 - **良い点**: 両レビュアーから上がった良い点を集約し重複を排除
-- **指摘事項**: 重要度別（must / should / nit）にまとめる。各指摘に **レビュアータグ**（`claude` / `codex`）を付与。同じ指摘が両方から上がっている場合は統合し、レビュアータグを両方付ける（**両者が独立に指摘 = 確度が高い**として強調表示）。各指摘に観点タグも併記
-- **まとめ**: 総合判断（マージ可否、ブロッカーの有無）。Claude / Codex の指摘傾向の違い（観点の偏り、見落としの差）にも触れてよい
+- **指摘事項**: 重要度別（must / should / nit）にまとめる。各指摘に **レビュアータグ**（`main` / `codex`）を付与。同じ指摘が両方から上がっている場合は統合し、レビュアータグを両方付ける（**両者が独立に指摘 = 確度が高い**として強調表示）。各指摘に観点タグも併記
+- **まとめ**: 総合判断（マージ可否、ブロッカーの有無）。main / Codex の指摘傾向の違い（観点の偏り、見落としの差）にも触れてよい
 
 HTML を採用する理由: 重要度の色分け（must=赤 / should=黄 / nit=灰）・レビュアー別バッジ・両者一致指摘の強調・`<details>` 折りたたみなど、Markdown では困難な表現を使うため。
 
 統合後の review.md / review.html は以下のセクションを md の見出し(`##`)として含める（html も同構成。テンプレートは置かない）:
 
 - **概要**
-- **サマリ**（must / should / nit の件数、両者一致の件数、Claude のみ / Codex のみの件数）
+- **サマリ**（must / should / nit の件数、両者一致の件数、main のみ / Codex のみの件数）
 - **良い点**
 - **指摘事項**（must / should / nit を `<h3>` で分け、各指摘にレビュアータグ + 観点タグ）
 - **まとめ**
 
 ### 6. ユーザーへの提示
 
-`review.html` のサマリ（各重要度の件数、両者一致の件数、ブロッカー概要、総合判断）をユーザーに提示する。詳細は `review-claude.html` と `review-codex.html` を参照するよう案内する（パスを案内するだけで、ブラウザで開くのは統合結果の `review.html` のみ。`review-claude.html` / `review-codex.html` / `context.html` は開かない）。
+`review.html` のサマリ（各重要度の件数、両者一致の件数、ブロッカー概要、総合判断）をユーザーに提示する。詳細は `review-main.html` と `review-codex.html` を参照するよう案内する（パスを案内するだけで、ブラウザで開くのは統合結果の `review.html` のみ。`review-main.html` / `review-codex.html` / `context.html` は開かない）。
 
 `<output-dir>/diff.patch` と `<output-dir>/context.html` は中間成果物として残す（後から再確認や再実行のため）。不要なら手動で削除する。
 
 ## 注意事項
 
-- Claude Code と Codex は **独立した視点** として並列で動かす。双方とも全観点を見るが、相互に結果を参照させない（独立性を保つことで見落としを相互補完する）
+- メインレビュアーと Codex は **独立した視点** として並列で動かす。双方とも全観点を見るが、相互に結果を参照させない（独立性を保つことで見落としを相互補完する）
 - 指摘には必ず該当ファイルと行番号を含める
 - 指摘ごとに重要度（must / should / nit）を付与する
 - 良い点も積極的にコメントする

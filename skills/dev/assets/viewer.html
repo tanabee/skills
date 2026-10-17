@@ -7,8 +7,8 @@
 <!-- /dev の成果物ビューア。使い方: viewer.html?dir=file:///abs/path/tmp/issues/<issue>/#<page>  (Chrome を --allow-file-access-from-files 付きで起動すること) -->
 <style>
   :root { --bg:#f6f8fa; --panel:#fff; --text:#1f2328; --muted:#656d76; --accent:#0969da; --border:#d0d7de;
-          --ok:#1a7f37; --new:#bf8700; --miss:#c9d1d9; --run:#8250df; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --border:#30363d; --miss:#30363d; } }
+          --ok:#1a7f37; --new:#bf8700; --miss:#c9d1d9; --run:#8250df; --wait:#bc4c00; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --border:#30363d; --miss:#30363d; --wait:#f0883e; } }
   * { box-sizing:border-box; }
   html, body { height:100%; margin:0; }
   body { display:flex; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; font-size:13px; }
@@ -26,13 +26,22 @@
   nav li.updated .dot { background:var(--new); box-shadow:0 0 0 3px color-mix(in srgb, var(--new) 30%, transparent); }
   nav li.running .dot { background:var(--run); animation:pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity:.3; } }
+  nav li.waiting .dot { background:var(--wait); box-shadow:0 0 0 3px color-mix(in srgb, var(--wait) 35%, transparent); animation:blink .9s steps(2, start) infinite; }
+  @keyframes blink { to { visibility:hidden; } }
   nav li .step { color:var(--muted); font-size:11px; margin-left:auto; }
+  nav li.waiting .step { color:var(--wait); font-weight:600; }
+  nav.waiting header { background:color-mix(in srgb, var(--wait) 12%, transparent); border-bottom-color:var(--wait); }
   nav footer { padding:8px 14px; border-top:1px solid var(--border); color:var(--muted); font-size:11px; display:flex; gap:8px; align-items:center; }
   nav footer label { display:flex; gap:4px; align-items:center; cursor:pointer; }
   main { flex:1; min-width:0; display:flex; flex-direction:column; }
   main .bar { height:34px; flex:none; display:flex; align-items:center; gap:10px; padding:0 12px; background:var(--panel); border-bottom:1px solid var(--border); color:var(--muted); font-size:12px; }
   main .bar b { color:var(--text); }
   main .bar a { color:var(--accent); text-decoration:none; margin-left:auto; }
+  .waitpill { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:12px; background:var(--wait); color:#fff; font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60%; }
+  .waitpill[hidden] { display:none; }
+  .banner { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:baseline; padding:12px 16px; margin-bottom:16px; border-radius:8px; border:1px solid var(--wait); background:color-mix(in srgb, var(--wait) 12%, transparent); }
+  .banner b { color:var(--wait); font-size:14px; }
+  .banner .note { flex-basis:100%; }
   iframe { flex:1; border:0; width:100%; background:#fff; }
   .empty { flex:1; display:grid; place-items:center; color:var(--muted); }
   #dash { flex:1; overflow:auto; padding:20px 24px; }
@@ -55,6 +64,7 @@
   .b-run  { background:color-mix(in srgb, var(--run) 18%, transparent); color:var(--run); }
   .b-todo { color:var(--muted); }
   .b-fail { background:color-mix(in srgb, #cf222e 18%, transparent); color:#cf222e; }
+  .b-wait { background:var(--wait); color:#fff; }
   .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
   .muted { color:var(--muted); }
   .note { font-size:12px; color:var(--muted); }
@@ -70,7 +80,7 @@
   <footer><label><input type="checkbox" id="auto" checked> 自動更新</label><span id="status"></span></footer>
 </nav>
 <main>
-  <div class="bar"><span>表示中:</span><b id="cur">—</b><span id="curStep"></span><a id="raw" target="_blank">別タブで開く ↗</a></div>
+  <div class="bar"><span>表示中:</span><b id="cur">—</b><span id="curStep"></span><span id="waitBar" class="waitpill" hidden></span><a id="raw" target="_blank">別タブで開く ↗</a></div>
   <div id="dash" hidden></div>
   <iframe id="frame" hidden></iframe>
   <div class="empty" id="empty">左の一覧から成果物を選択</div>
@@ -110,15 +120,30 @@ async function poll() {
   });
   render();
   if (changedCurrent && $('auto').checked) { if (state.current === 'dashboard') { renderDash(); state.seen.dashboard = true; } else reloadFrame(); }
+  else if (state.current === 'dashboard' && state.devState && (waiting() || STEPS.some(k => state.devState.steps?.[k] && !/^(completed|skipped)/.test(state.devState.steps[k])))) renderDash();
   $('status').textContent = new Date().toLocaleTimeString('ja-JP');
 }
+const WAIT_KINDS = { question:'サブスキルからの質問(質問リレー)', checkpoint:'チェックポイント停止', 'tier-confirm':'tier 確定の確認', prerequisite:'前提成果物欠如の確認', 'config-approval':'config 追記の承認', 'loop-limit':'ループ上限 / DoD 未充足の報告', resume:'再開の確認' };
+const waiting = () => { const w = state.devState?.waiting; return w && typeof w === 'object' ? w : null; };
+const waitLabel = w => WAIT_KINDS[w.kind] || w.kind || '回答待ち';
+const waitSince = w => w.since && !isNaN(new Date(w.since)) ? fmtDur(Math.max(0, Date.now() - new Date(w.since))) : '';
 function stepStatus(step) {
+  const w = waiting(); if (w && step && w.step === step) return 'waiting';
   const s = step && state.devState?.steps?.[step]; if (!s) return '';
   return s.startsWith('completed') ? 'done' : s.startsWith('skipped') ? 'skip' : s;
 }
+function renderWaiting() {
+  const w = waiting(), ds = state.devState;
+  const base = ds ? `issue #${ds.issue ?? '?'} · dev viewer` : 'dev viewer';
+  document.title = w ? `⏸ ${base}` : base;
+  document.querySelector('nav').classList.toggle('waiting', !!w);
+  const pill = $('waitBar');
+  pill.hidden = !w;
+  if (w) { const t = waitSince(w); pill.textContent = `⏸ 回答待ち: ${waitLabel(w)}${w.step ? ` (${w.step})` : ''}${t ? ` · ${t}` : ''}`; pill.title = w.summary || ''; }
+}
 function render() {
   const ds = state.devState;
-  if (ds) { $('title').innerHTML = issueLink(ds, `issue #${esc(ds.issue)}`); $('meta').textContent = [ds.tier, ds.mode, ds.status].filter(Boolean).join(' / '); }
+  if (ds) { $('title').innerHTML = issueLink(ds, `issue #${esc(ds.issue)}`); $('meta').textContent = [ds.tier, ds.mode, waiting() ? '⏸ 回答待ち' : ds.status].filter(Boolean).join(' / '); }
   else { $('title').textContent = decodeURIComponent(dir.split('/').filter(Boolean).pop() || 'dev viewer'); $('meta').textContent = 'dev-state.json なし'; }
   const nothing = PAGES.every(p => state.hashes[p.key] == null);
   $('empty').textContent = nothing && !ds ? '成果物を読めません。?dir= のパスと、Chrome を --allow-file-access-from-files 付きで起動しているか確認してください' : '左の一覧から成果物を選択';
@@ -127,11 +152,12 @@ function render() {
     const li = document.createElement('li');
     const present = state.hashes[p.key] !== null && state.hashes[p.key] !== undefined;
     const st = stepStatus(p.step);
-    li.className = [present ? 'present' : 'missing', present && state.seen[p.key] === false ? 'updated' : '', st && st !== 'done' && st !== 'skip' ? 'running' : '', state.current === p.key ? 'active' : ''].join(' ');
+    li.className = [present ? 'present' : 'missing', present && state.seen[p.key] === false ? 'updated' : '', st === 'waiting' ? 'waiting' : st && st !== 'done' && st !== 'skip' ? 'running' : '', state.current === p.key ? 'active' : ''].join(' ');
     li.innerHTML = `<span class="dot"></span><span>${p.label}</span><span class="step">${st}</span>`;
     if (present) li.onclick = () => show(p.key);
     $('list').appendChild(li);
   }
+  renderWaiting();
 }
 function show(key) {
   const p = PAGES.find(x => x.key === key); if (!p) return;
@@ -149,7 +175,7 @@ const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const issueLink = (ds, text) => ds.issue_url ? `<a class="issue" href="${esc(ds.issue_url)}" target="_blank" rel="noopener">${text}</a>` : text;
 const badge = st => {
   if (!st) return '<span class="badge b-todo">—</span>';
-  const cls = st.startsWith('completed') ? 'b-done' : st.startsWith('skipped') ? 'b-skip' : /fail|error|needs/.test(st) ? 'b-fail' : 'b-run';
+  const cls = st.startsWith('waiting') ? 'b-wait' : st.startsWith('completed') ? 'b-done' : st.startsWith('skipped') ? 'b-skip' : /fail|error|needs/.test(st) ? 'b-fail' : 'b-run';
   const head = st.split(' ')[0], rest = st.slice(head.length).trim();
   return `<span class="badge ${cls}">${esc(head)}</span>${rest ? ` <span class="note">${esc(rest)}</span>` : ''}`;
 };
@@ -160,16 +186,19 @@ function renderDash() {
   const steps = ds.steps ?? {}, models = ds.models ?? {}, timings = ds.timings ?? {}, loops = ds.loops ?? {};
   const done = STEPS.filter(k => /^(completed|skipped)/.test(steps[k] ?? '')).length;
   const running = STEPS.find(k => steps[k] && !/^(completed|skipped)/.test(steps[k]));
+  const w = waiting();
+  const banner = w ? `<div class="banner"><b>⏸ ユーザーの回答待ち</b><span>${esc(waitLabel(w))}</span>${w.step ? `<span class="mono">${esc(w.step)}</span>` : ''}${waitSince(w) ? `<span class="muted">${esc(waitSince(w))} 経過</span>` : ''}${w.summary ? `<span class="note">${esc(w.summary)}</span>` : ''}<span class="note">ターミナルに戻って回答すると再開します</span></div>` : '';
   const cards = [
-    ['issue', issueLink(ds, `#${esc(ds.issue ?? '?')}`) + (ds.issue_url ? ` <span class="note">${esc(ds.issue_url.replace(/^https?:\/\/github\.com\//, '').replace(/\/issues\/\d+$/, ''))}</span>` : '')], ['status', ds.status ?? (running ? `running: ${running}` : '—')],
+    ['issue', issueLink(ds, `#${esc(ds.issue ?? '?')}`) + (ds.issue_url ? ` <span class="note">${esc(ds.issue_url.replace(/^https?:\/\/github\.com\//, '').replace(/\/issues\/\d+$/, ''))}</span>` : '')], ['status', w ? `<span class="badge b-wait">waiting</span> <span class="note">${esc(waitLabel(w))}</span>` : ds.status ?? (running ? `running: ${running}` : '—')],
     ['tier', `${ds.tier ?? '—'}${ds.tier_source ? ` <span class="note">(${esc(ds.tier_source)})</span>` : ''}${ds.fixed ? ` <span class="note">fixed ${esc(ds.fixed.model)}/${esc(ds.fixed.effort)}</span>` : ''}`],
-    ['mode', ds.mode ?? '—'], ['session model', `<span class="mono">${esc(ds.session_model ?? '—')}</span>`],
+    ['mode', ds.mode ?? '—'], ['runtime', `<span class="mono">${esc(ds.runtime ?? '—')}</span>`], ['session model', `<span class="mono">${esc(ds.session_model ?? '—')}</span>`],
     ['agents', ds.agents_ready === false ? '<span class="badge b-fail">not ready</span>' : ds.agents_ready ? '<span class="badge b-done">ready</span>' : '—'],
   ].map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
   const rows = STEPS.map(k => {
     const m = models[k] ? models[k] : (steps[k]?.startsWith('skipped') ? '' : '');
     const reason = ds.skip_reasons?.[k] ? `<span class="note">${esc(ds.skip_reasons[k])}</span>` : '';
-    return `<tr><td class="mono">${k}</td><td>${badge(steps[k])}</td><td class="mono">${esc(m) || '<span class="muted">—</span>'}</td><td class="mono">${dur(timings[k]) || '<span class="muted">—</span>'}</td><td>${reason}</td></tr>`;
+    const st = w && w.step === k ? `waiting ${waitLabel(w)}` : steps[k];
+    return `<tr><td class="mono">${k}</td><td>${badge(st)}</td><td class="mono">${esc(m) || '<span class="muted">—</span>'}</td><td class="mono">${dur(timings[k]) || '<span class="muted">—</span>'}</td><td>${reason}</td></tr>`;
   }).join('');
   const loopRows = Object.entries(loops).map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
   const fails = (ds.test_failures ?? []).map((r, i) => `<tr><td>round ${i+1}</td><td>${r.map(esc).join('<br>')}</td></tr>`).join('');
@@ -178,7 +207,8 @@ function renderDash() {
     ['triage_confirm', ds.triage_confirm_result && `${ds.triage_confirm_result.tier} (${ds.triage_confirm_result.source}) ${ds.triage_confirm_result.note ?? ''}`]]
     .filter(([, v]) => v).map(([k, v]) => `<tr><td class="mono">${k}</td><td>${esc(v)}</td></tr>`).join('');
   $('dash').innerHTML = `
-    <h2>進捗 <span class="note">${done} / ${STEPS.length} ステップ${running ? ` · 実行中: ${esc(running)}` : ''}</span></h2>
+    ${banner}
+    <h2>進捗 <span class="note">${done} / ${STEPS.length} ステップ${w ? ` · 回答待ち: ${esc(w.step ?? '')}` : running ? ` · 実行中: ${esc(running)}` : ''}</span></h2>
     <div class="progress"><i style="width:${Math.round(done / STEPS.length * 100)}%"></i></div>
     <div class="cards" style="margin-top:12px">${cards}</div>
     <h2>ステップ <span class="note">model / effort は実際に起動した値(dev-state.json の models)</span></h2>

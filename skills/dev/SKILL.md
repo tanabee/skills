@@ -42,7 +42,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 ### 実行形態表(tier × ステップ)
 
-値は `agent:<model>/<effort>`(Agent ツールで別コンテキストとして実行。`subagent_type` に **`dev-<model>-<effort>`** を指定し、**`model` 引数は渡さない**)/ `skip`。model はエージェント定義の frontmatter でフル ID に固定してある(`opus` = `claude-opus-5-5[1m]`、`fable` = `claude-fable-5-1`)。Agent ツールの `model` 引数はエイリアスしか受け付けず、`opus` が環境によって **Opus 5 に解決される**ため使わない。**ステップはすべて agent で動かし、inline(セッションモデル)で動くのは dev 本体だけ**。セッションの model / effort はステップの実行には影響しないが、**dev 本体はセッションモデルで動く**ので、セッションは Opus 5.5 以上を推奨する(※4)。
+値は `agent:<model>/<effort>`(Agent ツールで別コンテキストとして実行。`subagent_type` に **`dev-<model>-<effort>`** を指定し、**`model` 引数は渡さない**)/ `skip`。model はエージェント定義の frontmatter でフル ID に固定してある(`opus` = `claude-opus-5-5[1m]`、`fable` = `claude-fable-5-1`)。Agent ツールの `model` 引数はエイリアスしか受け付けず、`opus` が環境によって **Opus 5 に解決される**ため使わない。**ステップはすべて agent で動かし、inline(セッションモデル)で動くのは dev 本体だけ**(**Claude Code 以外から呼ばれた場合はこの表を使わず全ステップ inline**。後述「Claude Code 以外の実行環境」)。セッションの model / effort はステップの実行には影響しないが、**dev 本体はセッションモデルで動く**ので、セッションは Opus 5.5 以上を推奨する(※4)。
 
 | ステップ | S | M | L | XL | fixed:\<model\>/\<effort\> |
 |---|---|---|---|---|---|
@@ -58,7 +58,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | create-pr-text | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/medium | agent:\<model\>/\<effort\> |
 | test | agent:opus/low ※2 | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
 | review(親: 収集・統合) | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
-| └ Claude レビュアー Agent(review 内) | opus/medium(正確性・副作用のみ) | opus/high | fable/xhigh | fable/xhigh | \<model\>/\<effort\> |
+| └ メインレビュアー Agent(review 内) | opus/medium(正確性・副作用のみ) | opus/high | fable/xhigh | fable/xhigh | \<model\>/\<effort\> |
 | quiz | skip | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
 | notify-discord | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
 | dev 本体(状態管理・DoD ゲート・config 学習・質問リレー) | inline(セッションモデル。**Opus 5.5 以上を推奨** ※4) | ← | ← | ← | inline |
@@ -83,6 +83,19 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 1. `~/.claude/agents/dev-opus-*.md` / `dev-fable-*.md` の 10 ファイルが存在し、`assets/agents/` と内容が一致するか `diff -q` で確認する。無い・違うものは `assets/agents/` からコピーする(`mkdir -p ~/.claude/agents`)。旧 `dev-effort-*.md` が残っていれば削除する(`model: inherit` のため、エイリアス経由で Opus 5 に落ちうる)。追加・更新は数秒で自動反映される(再起動不要)
 2. ただし `~/.claude/agents/` を今回新規作成した場合(そのスコープで初のエージェント定義)は Claude Code の再起動まで定義が読まれない。その旨をユーザーに伝え、**再起動後の再実行を案内して停止する**
 3. `dev-<model>-<effort>` を Agent ツールが受け付けない場合も同様に**停止して報告する**。`general-purpose` + `model` エイリアスへの fallback は行わない(Opus 5 に落ちる経路を残さないため)。dev-state.json に `agents_ready: false` と理由を記録する
+
+上記 1〜3 は Claude Code で動いているときだけ行う(次節)。
+
+### Claude Code 以外の実行環境(全ステップ inline)
+
+実行形態表と前節は Claude Code の Agent ツール(`subagent_type: dev-<model>-<effort>`)を前提にしている。**Codex CLI・Cursor・Gemini CLI など、この形の Agent ツールが無い環境から呼ばれた場合は、ユーザーに確認せず自然に「全ステップを自分(その AI のセッションモデル)で inline 実行する」を選ぶ**。model / effort の切り替えと Opus 5 回避は Claude Code 固有の事情で、他環境では成立しないため。
+
+- **判別**: 開始時に利用可能なツールを見て、`subagent_type` を取る Agent ツールが無ければ「Claude Code 以外」。dev-state.json に `runtime` を記録する(Claude Code なら `"claude-code"`、それ以外は環境名。例 `"codex"`)
+- **triage は 3 つとも skip**(tier は主に model 選択に効くもので、inline では判定の価値が薄い)。tier 引数があればそのスキップ集合とループ上限を使い、無ければ **`M` として扱う**(`tier_source: "runtime-default"`。何も skip しない)
+- **各ステップ**: ステップ定義表の順に、サブスキルを本会話内で実行する(Skill ツール相当が無ければサブスキルの SKILL.md を読んでその指示に従う)。`models` は全ステップ `inline` と記録し、並列グループは表の順の直列で実行する。サブスキル内部のファンアウト(research / review)は各 SKILL.md の規定どおり inline に落ちる
+- **質問**: AskUserQuestion 相当の手段があればそれを、無ければ通常のメッセージで質問して回答を待つ。サブスキルも inline なので質問リレーは発生しない(サブスキルが直接質問する)。入力待ちの `waiting` 記録(後述)は同様に行う
+- **省くもの**: セッションモデルの確認(セットアップ質問 3)・エージェント定義の準備(`agents_ready: null`)・タスク管理ツールが無い環境での TaskCreate 系。成果物ビューアは `/open` 相当でブラウザを開けるなら開き、開けなければ各ステップ完了時に成果物パスを案内するだけにする(`viewer: false`)
+- それ以外(ステップ順・前提成果物・ループ・DoD・config 学習・チェックポイント)は Claude Code と同じ
 
 ## 開始時セットアップ
 
@@ -129,8 +142,10 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
   "fixed": null,
   "checkpoints": ["plan", "review"],
   "skips": ["quiz"],
+  "runtime": "claude-code",
   "agents_ready": true,
   "session_model": "claude-opus-5-5[1m]",
+  "waiting": null,
   "models": { "triage-initial": "opus/medium", "research": "opus/high", "plan": "fable/high" },
   "timings": { "research": { "started": "2026-10-08T10:00:00+09:00", "finished": "2026-10-08T10:12:30+09:00" } },
   "agents": { "research": "<agentId>" },
@@ -144,7 +159,9 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 - `skips` は tier から導出した結果(自動スキップ含む)の記録。人が選ぶ項目ではない
 - `fixed` は `fixed:` 指定時のみ `{ "model": "opus", "effort": "high" }`
 - `models` は各ステップを実際に起動した `<model>/<effort>` の記録(ループで再実行しても同じ model なら上書きでよい)。`timings` はステップの開始・完了時刻(ISO 8601)。どちらもビューアの dashboard が表示する。`agents` は質問リレーの再開に使う agentId(ステップ完了時に消してよい)
-- `agents_ready` は `dev-<model>-<effort>` 定義で起動できたか(false なら停止している。fallback は無い)
+- `runtime` は dev 本体が動いている実行環境(`claude-code` / `codex` 等。「Claude Code 以外の実行環境」の判別結果)
+- `agents_ready` は `dev-<model>-<effort>` 定義で起動できたか(false なら停止している。fallback は無い。Claude Code 以外では `null`)
+- `waiting` はユーザーの回答待ちで停止している間だけ非 null(後述「入力待ちの記録」)。ビューアが実行中と区別して表示する
 - `session_model` は dev 本体が動いているモデル。Fable のまま続行した run を後から集計で見分けるために記録する
 - `loops.test_inner` は外側に出るたび 0 にリセットする。`test_failures` は内側の各ラウンドで失敗した checklist 項目名の配列(早期エスカレーション判定に使う。外側に出たらクリアする)
 - `/dev` 開始時に同 issue の dev-state.json が既に存在する場合は内容を読み、未完了の最初のステップからの再開をユーザーに提案する(auto では自動で再開)。tier は記録済みの値を使う
@@ -155,7 +172,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 
 - **URL**: `file://<本スキルの assets/viewer.html の絶対パス>?dir=file://<成果物ディレクトリの絶対パス>/#<page>`(`dir` は末尾 `/` 付き。viewer.html は成果物ディレクトリにコピーしない)
 - **開くタイミング**: dev-state.json を書き出した直後(セットアップ完了時)に `/open <URL>#dashboard` で 1 回開く。以降は各ステップ完了後に `#<page>` 付きで `/open` を呼ぶだけでよい。`/open` は同 URL のタブがあればリロード、ハッシュ違いならページ内遷移にするので(open スキルの「開き方」)、タブは増えない
-- **ビューアの挙動**: 先頭の `dashboard` は dev-state.json を描画したページ(進捗バー・ステップ表・ループ・DoD)。3 秒ごとに `dev-state.json` と各 html を fetch し、未生成はグレー、更新ありは黄、進行中ステップ(`steps` が completed / skipped 以外)は紫で表示する。表示中ページが更新されるとスクロール位置を保ってリロードする。open スキルの config に `--allow-file-access-from-files` が必要(open スキルが自動で追記する)
+- **ビューアの挙動**: 先頭の `dashboard` は dev-state.json を描画したページ(進捗バー・ステップ表・ループ・DoD)。3 秒ごとに `dev-state.json` と各 html を fetch し、未生成はグレー、更新ありは黄、進行中ステップ(`steps` が completed / skipped 以外)は紫、**ユーザーの回答待ち(`waiting` が非 null)はオレンジで表示し、タブタイトルに ⏸ を付け、全ページ共通の上部バーとダッシュボード先頭に待ちの内容(種別・ステップ・経過時間・要約)を出す**(実行中と見分けるため)。表示中ページが更新されるとスクロール位置を保ってリロードする。open スキルの config に `--allow-file-access-from-files` が必要(open スキルが自動で追記する)
 - `/open` が `"browser": "default"` の場合も同じ URL を開くが、既定ブラウザでは `file://` の fetch が効かないため一覧がグレーのままになる。その場合は従来どおり個別 html を `/open` で開く(dev-state.json に `viewer: false` を記録)
 
 | ステップ | page | 備考 |
@@ -166,7 +183,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 | review-plan | `review-plan` | |
 | implement | `report` | |
 | test | `checklist` | compare.html があれば `compare` |
-| review | `review` | review-claude / review-codex / context は一覧に出さない(中間成果物) |
+| review | `review` | review-main / review-codex / context は一覧に出さない(中間成果物) |
 | quiz | `quiz` | |
 
 ## 作業ブランチの準備
@@ -239,7 +256,7 @@ Agent ツール(`subagent_type: dev-<model>-<effort>`。実行形態表の値。
 
 ### 質問リレー(normal モードの subagent からの質問)
 
-1. `status: needs-input` が返ったら `tmp/issues/<issue番号>/questions.json` を読み、その内容を**そのまま** AskUserQuestion でユーザーに提示する(質問文・選択肢・multiSelect を変えない。自由入力も受け付ける)
+1. `status: needs-input` が返ったら `tmp/issues/<issue番号>/questions.json` を読み、dev-state.json の `waiting`(後述)を書いてから、その内容を**そのまま** AskUserQuestion でユーザーに提示する(質問文・選択肢・multiSelect を変えない。自由入力も受け付ける)
 2. 回答を questions.json の `answers` に書き込み、SendMessage で同じ subagent(`agents` に記録した agentId)に「questions.json に回答を書いた。続きから進めよ」と送って再開する。再開した subagent は文脈を保持したまま続きから進む
 3. `status: done` が返るまで 1〜2 を繰り返す(research は 1 テーマずつ質問するので複数回になりうる)
 4. 再開できない(subagent が失われた等)場合は、questions.json の回答を含めて同じステップを新規起動する(サブスキルは既存成果物と回答を読んで再開する)
@@ -259,6 +276,27 @@ questions.json のフォーマット(AskUserQuestion と同じ構造):
 ```
 
 `answers` は `{ "<question>": "<回答(自由入力含む)>" }` の形で dev が書く。チェックポイント停止・tier 確定時の確認は dev 自身の質問なのでリレーの対象外。
+
+### 入力待ちの記録(dev-state.json の `waiting`)
+
+ユーザーの回答を待って停止する箇所では、質問を出す**直前**に dev-state.json の `waiting` を書き、回答を受けて再開した直後に `null` に戻す。ビューアはこれで「実行中」と「回答待ち」を区別する(ビューア上は紫からオレンジ+⏸ に変わり、ターミナルに戻って回答すべきことが分かる)。
+
+```json
+"waiting": { "kind": "question", "step": "plan", "since": "2026-10-08T10:05:00+09:00", "summary": "実装方式の選択(質問 1 件)" }
+```
+
+| kind | 発生箇所 |
+|---|---|
+| `question` | 質問リレー(subagent からの `needs-input`) |
+| `checkpoint` | チェックポイント停止 |
+| `tier-confirm` | tier 確定時の確認(normal / `source: default`) |
+| `prerequisite` | 前提成果物欠如時の続行確認(normal) |
+| `config-approval` | config 追記の承認(normal) |
+| `loop-limit` | ループ上限到達・DoD 未充足で判断を仰ぐ報告 |
+| `resume` | 既存 dev-state.json からの再開提案 |
+
+- `step` は待ちの原因になったステップ(dev 自身の質問なら直前に完了した・または次に実行するステップ)。`since` は ISO 8601。`summary` は 1 行(質問リレーなら questions.json の先頭 `header` と質問数)
+- セットアップ質問は dev-state.json 書き出し前なので対象外。Claude Code 以外の inline 実行でサブスキルが直接質問する場合も、dev が把握できる範囲(ステップ開始前・完了後の自分の質問)で同様に書く
 
 ### 並列グループの実行
 
@@ -348,4 +386,4 @@ review ループを抜けたら、グループ B に進む前に plan.md の「�
 - 成果物 html を増やす場合は `assets/viewer.html` の `PAGES` と「成果物ビューア」の表に 1 行ずつ足す
 - ステップの増減・並列グループ・実行形態の変更はステップ定義表と実行形態表の修正だけで完結させる。**サブスキルの SKILL.md に model / effort を書かない**(frontmatter の model 上書きは静的で、そのターンの残り全体に残るため fixed と両立しない)。model と effort の器は `assets/agents/dev-{opus,fable}-*.md` の 10 定義だけで、値の割り当ては実行形態表が持つ。**Opus 5 に解決されうるエイリアス起動(`model: opus`)はどこにも書かない**
 - サブスキル間の成果物規約(必須セクション・フォーマット)は各サブスキルの SKILL.md が定義する。dev は **成果物パスの受け渡し・実行順序・実行形態(model)・HTML 成果物のオープン・ループ・状態管理** にのみ責務を持つ
-- subagent の結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行(Skill ツールで本会話内)に切り替える(セッションの model / effort で動くことになるが、止まるよりよい。dev-state.json の `models` に `inline` と記録する)
+- subagent の結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行(Skill ツールで本会話内)に切り替える(セッションの model / effort で動くことになるが、止まるよりよい。dev-state.json の `models` に `inline` と記録する)。Claude Code 以外の実行環境では最初から全ステップ inline(「Claude Code 以外の実行環境」)

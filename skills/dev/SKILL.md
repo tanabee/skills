@@ -58,7 +58,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | create-pr-text | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/medium | agent:\<model\>/\<effort\> |
 | test | agent:opus/low ※2 | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
 | review(親: 収集・統合) | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
-| └ メインレビュアー Agent(review 内) | opus/medium(正確性・副作用のみ) | opus/high | fable/xhigh | fable/xhigh | \<model\>/\<effort\> |
+| └ Claude レビュアー Agent(review 内) | opus/medium(正確性・副作用のみ) | opus/high | fable/xhigh | fable/xhigh | \<model\>/\<effort\> |
 | quiz | skip | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
 | notify-discord | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
 | dev 本体(状態管理・DoD ゲート・config 学習・質問リレー) | inline(セッションモデル。**Opus 5.5 以上を推奨** ※4) | ← | ← | ← | inline |
@@ -92,7 +92,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 
 - **判別**: 開始時に利用可能なツールを見て、`subagent_type` を取る Agent ツールが無ければ「Claude Code 以外」。dev-state.json に `runtime` を記録する(Claude Code なら `"claude-code"`、それ以外は環境名。例 `"codex"`)
 - **triage は 3 つとも skip**(tier は主に model 選択に効くもので、inline では判定の価値が薄い)。tier 引数があればそのスキップ集合とループ上限を使い、無ければ **`M` として扱う**(`tier_source: "runtime-default"`。何も skip しない)
-- **各ステップ**: ステップ定義表の順に、サブスキルを本会話内で実行する(Skill ツール相当が無ければサブスキルの SKILL.md を読んでその指示に従う)。`models` は全ステップ `inline` と記録し、並列グループは表の順の直列で実行する。サブスキル内部のファンアウト(research / review)は各 SKILL.md の規定どおり inline に落ちる
+- **各ステップ**: ステップ定義表の順に、サブスキルを本会話内で実行する(Skill ツール相当が無ければサブスキルの SKILL.md を読んでその指示に従う)。`models` は全ステップ `inline` と記録し、並列グループは表の順の直列で実行する。サブスキル内部のファンアウト(research / review)は各 SKILL.md の規定に従う(review は agy・Claude (`claude -p --model claude-fable-5-1 --effort xhigh`)・Codex (`gpt-6-astra`) の 3 者を並列実行)
 - **質問**: AskUserQuestion 相当の手段があればそれを、無ければ通常のメッセージで質問して回答を待つ。サブスキルも inline なので質問リレーは発生しない(サブスキルが直接質問する)。入力待ちの `waiting` 記録(後述)は同様に行う
 - **省くもの**: セッションモデルの確認(セットアップ質問 3)・エージェント定義の準備(`agents_ready: null`)・タスク管理ツールが無い環境での TaskCreate 系。成果物ビューアは `/open` 相当でブラウザを開けるなら開き、開けなければ各ステップ完了時に成果物パスを案内するだけにする(`viewer: false`)
 - それ以外(ステップ順・前提成果物・ループ・DoD・config 学習・チェックポイント)は Claude Code と同じ
@@ -183,7 +183,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 | review-plan | `review-plan` | |
 | implement | `report` | |
 | test | `checklist` | compare.html があれば `compare` |
-| review | `review` | review-main / review-codex / context は一覧に出さない(中間成果物) |
+| review | `review` | review-agy / review-claude / review-codex / context は一覧に出さない(中間成果物) |
 | quiz | `quiz` | |
 
 ## 作業ブランチの準備
@@ -248,7 +248,7 @@ Agent ツール(`subagent_type: dev-<model>-<effort>`。実行形態表の値。
   - implement: 完了したタスク数、Deviations の件数、`fix` 時は直した内容(または `status: needs-replan` と plan の何を直すか)
   - review-plan: 判定(OK / 差し戻し)、must / should / OK の件数、must の要旨(1 行ずつ)
   - implement: 変更ファイル数、Deviations の件数と要旨、lint / type check の結果
-  - review: must / should / nit の件数、両者一致の件数、ブロッカー概要、総合判断
+  - review: must / should / nit の件数、複数一致(3 者 / 2 者)の件数、ブロッカー概要、総合判断
   - test: 失敗項目の有無と件数、compare.html の有無
   - capture / create-pr-text / quiz / notify-discord: 生成した成果物のパスと要点(capture はスキップ理由があればそれ)
 

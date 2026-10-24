@@ -1,22 +1,22 @@
 ---
 name: review
-description: 本スキルを実行している AI(メインレビュアー)と Codex CLI による並列コードレビュー。親で差分・コンテキストを 1 回だけ収集し、メインレビュー（全観点を一括レビュー）と Codex（`/codex-review` 経由）を並列実行、結果を統合した review.md / review.html を生成する。
+description: Antigravity (agy)・Claude (fable)・Codex (astra) の 3 者による並列コードレビュー。親で差分・コンテキストを 1 回だけ収集し、3 レビュアーを並列実行、結果を統合した review.md / review.html を生成する。
 allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 ---
 
-**メインレビュアー**（本スキルを実行している AI。Claude Code とは限らない）と Codex CLI で並列にコードレビューを行い、結果を統合する。実行環境が Codex の場合もメインレビュー（本スキルの観点・手順）と `/codex-review`（ネイティブレビュー）は別の独立した実行として扱う。
+**Antigravity (`agy`)**・**Claude (`fable`: `claude-fable-5-1`)**・**Codex (`astra`: `gpt-6-astra`)** の 3 者で並列にコードレビューを行い、結果を統合する。実行環境（agy / Claude Code / Codex CLI 等）を問わず、常にこの 3 レビュアーが独立した視点でレビューを実施する。
 
-**効率化の肝**: 差分取得・PR/Issue 情報収集・ローカル成果物読み込みは**親（本スキル本体）で 1 回だけ**実行し、`diff.patch` と `context.html` としてディスクに書き出す。メインレビューを担当するエージェントはこの 2 ファイルを Read するだけで共通コンテキストを得られる。Codex 側は別レビュアーの独立視点として `/codex-review` をそのまま呼び出す。
+**効率化の肝**: 差分取得・PR/Issue 情報収集・ローカル成果物読み込みは**親（本スキル本体）で 1 回だけ**実行し、`diff.patch` と `context.html` としてディスクに書き出す。agy レビュアーと Claude レビュアーはこの 2 ファイルを Read するだけで共通コンテキストを得られる。Codex 側は別レビュアーの独立視点として `/codex-review`（`gpt-6-astra`）を呼び出す。
 
 ## 引数
 
-`$ARGUMENTS` は `<対象> [tier]` の形式。`<対象>` は PR 番号/URL または issue 番号/URL（省略可）。`123`、`#123`、PR URL、issue URL のいずれか。`[tier]` は `/dev` から渡される難易度（`S` / `M` / `L` / `XL` / `fixed:<model>[/<effort>]`）で、メインレビュアー Agent の model / effort と観点の範囲を決めるためだけに使う（手順 4-A 参照）。
+`$ARGUMENTS` は `<対象> [tier]` の形式。`<対象>` は PR 番号/URL または issue 番号/URL（省略可）。`123`、`#123`、PR URL、issue URL のいずれか。`[tier]` は `/dev` から渡される難易度（`S` / `M` / `L` / `XL` / `fixed:<model>[/<effort>]`）で、レビュー観点の範囲や Claude Code 実行時の Agent 設定を決めるために使う（手順 4 参照）。
 
 数値（`123`、`#123`）が渡された場合は、まず `gh pr view <番号>` を試みて PR が存在すれば PR モード、存在しなければ issue 番号として扱いローカルモードに入る。URL の場合は `/pull/` を含めば PR、`/issues/` を含めば issue として判定する。
 
 ## レビュー観点
 
-メインレビュアー・Codex 双方とも、以下の観点を網羅的に見る。複数のレビュアーが同じ観点を独立に見ることで、見落としを相互補完する。
+3 レビュアー（agy / Claude / Codex）すべて、以下の観点を網羅的に見る。複数の異なるモデル（Gemini / Claude Fable / GPT-6 Astra）が同じ観点を独立に見ることで、見落としを相互補完する。
 
 | 観点 | 主な確認事項 |
 |---|---|
@@ -34,21 +34,22 @@ allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, Tas
 
 ### 初期化
 
-スキル開始直後に、以下の 6 タスクを `TaskCreate` で一括登録する（すべて `pending`）:
+スキル開始直後に、以下の 7 タスクを `TaskCreate` で一括登録する（すべて `pending`）:
 
 1. `prepare-output-dir` — 保存先判定と作成
 2. `collect-diff` — `diff.patch` の書き出し
 3. `collect-context` — `context.html` の書き出し
-4. `review-main` — メインレビュー（Agent 呼び出し、または本会話内）
-5. `review-codex` — Codex レビュー（`/codex-review` 呼び出し）
-6. `integrate-review` — `review.md` / `review.html` への統合
+4. `review-agy` — Antigravity (agy) レビュー
+5. `review-claude` — Claude (fable) レビュー
+6. `review-codex` — Codex (astra) レビュー（`/codex-review` 呼び出し）
+7. `integrate-review` — `review.md` / `review.html` への統合
 
 ### 進行管理ルール
 
 - 各ステップに入る直前に該当タスクを `TaskUpdate` で `in_progress` に変更
 - ステップが正常完了したら即座に `completed` に変更（**バッチ更新しない**）
-- 並列実行ステップ（`review-main` と `review-codex`）は **同時に両方を `in_progress` にしてよい**。これは「同時に in_progress にできるのは 1 タスクのみ」の例外として運用する
-- いずれかの並列ステップが失敗した場合は該当タスクを `cancelled` にし、もう一方の結果のみで `integrate-review` を進めるかユーザーに判断を仰ぐ
+- 並列実行ステップ（`review-agy`・`review-claude`・`review-codex`）は **同時に複数を `in_progress` にしてよい**。これは「同時に in_progress にできるのは 1 タスクのみ」の例外として運用する
+- いずれかの並列ステップが失敗した場合は該当タスクを `cancelled` にし、残りのレビュアーの結果で `integrate-review` を進めるかユーザーに判断を仰ぐ
 
 ## 手順
 
@@ -74,7 +75,7 @@ allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, Tas
 
 ### 3. コンテキストをファイルに書き出す（1 回だけ）
 
-PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.html` に親の `Write` ツールで **HTML** として書き出す。メインレビュアーはこのファイルを Read してコンテキストを得る。
+PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.html` に親の `Write` ツールで **HTML** として書き出す。レビュアーはこのファイルを Read してコンテキストを得る。
 
 収集内容:
 
@@ -89,13 +90,13 @@ PR / Issue / ローカル成果物の情報を収集し、`<output-dir>/context.
 
 `context.html` のフォーマットは [assets/context-template.html](./assets/context-template.html) を参照。該当しないセクション（例: ローカルモード時の PR 情報、PR モード時のローカル成果物）は省略してよい。
 
-### 4. メインレビューと Codex レビューの並列実行
+### 4. 3 者レビュー（agy / Claude / Codex）の並列実行
 
-**1 メッセージ内で 2 つのレビューを並列発行する**（逐次実行しない）。
+**3 つのレビューを並列に実行する**（独立した視点として動かし、相互に結果を参照させない）。
 
-#### 4-A. メインレビュー（Claude Code では Agent ツールで `dev-<model>-<effort>` を起動、それ以外の環境では本会話内で実施）
+#### 共通レビュープロンプト（agy / Claude 共通）
 
-Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opus/medium`、`M` → `opus/high`、`L` / `XL` → `fable/xhigh`、`fixed:<model>[/<effort>]` → その値、tier 省略時 → `fable/xhigh`（must 指摘の精度がループ回数に直結するため、指定が無ければ高い方に倒す）。`subagent_type` は `dev-<model>-<effort>`（`/dev` が `~/.claude/agents/` に置く、model をフル ID で固定した定義。`model` 引数は渡さない — エイリアス `opus` は環境により Opus 5 に解決されるため）。定義が無い場合は Opus 5 に落ちうる `general-purpose` + `model` で代替せず、メインレビューをスキップして Codex のみで進め、review.md にその旨を明記する。**Claude Code 以外の環境（`subagent_type` を取る Agent ツールが無い）では、スキップせず本スキルを実行している AI 自身が本会話内で同じ観点・同じ出力形式でメインレビューを実施する**（Opus 5 回避の事情が無いため。tier による model / effort の切り替えは無視する）。**`S` では観点を「正確性」「副作用 / 影響範囲」の 2 つに絞る**（`<review-perspectives>` にその 2 行だけ転記し、プロンプトの「全観点」を「この 2 観点」に読み替える）。プロンプトは以下:
+agy（4-A）と Claude（4-B）には以下の共通プロンプトを使用する。`<output-file>` は agy なら `review-agy.html`、Claude なら `review-claude.html` に置き換える。**`S` tier では観点を「正確性」「副作用 / 影響範囲」の 2 つに絞る**（`<review-perspectives>` にその 2 行だけ転記し、プロンプトの「全観点」を「この 2 観点」に読み替える）。
 
 ```
 あなたはコードレビュアーです。以下の入力ファイルを Read してから、全観点を網羅したレビューを実施し、結果を output-path に HTML で Write してください。
@@ -105,7 +106,7 @@ Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opu
 - context-path: <output-dir 絶対パス>/context.html
 
 ## 出力先
-- output-path: <output-dir 絶対パス>/review-main.html
+- output-path: <output-dir 絶対パス>/<output-file>
 
 ## レビュー観点（全てを網羅的に見る）
 
@@ -120,7 +121,7 @@ Agent を 1 つ起動する。model / effort は tier で決める: `S` → `opu
 
 ## 出力フォーマット
 
-HTML で以下のセクションを `<h2>` 等の見出しで含める:
+HTML（`<!DOCTYPE html>` から `</html>` までの完結した HTML）で以下のセクションを `<h2>` 等の見出しで含める:
 
 - **概要**: 変更の骨子（`context.html` を踏まえる）
 - **良い点**: 評価できる実装
@@ -138,51 +139,75 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 - コードベースの検索は Grep ツール、または `git grep` / `rg` を使う（gitignore されたファイルを読まない）。Bash の `grep -r` / `find <dir>` は `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになるため使わない。やむを得ず使う場合は `--exclude='.secret*' --exclude-dir=node_modules` を必ず付ける
 ```
 
-パスは**絶対パス**で渡す（エージェントの CWD が親と一致する保証がないため）。`<review-perspectives>` には本 SKILL.md 冒頭の「レビュー観点」セクションの表を**そのまま転記して**展開する（観点表の定義は 1 箇所に保つため、プロンプト内には重複記載しない）。
+パスは**絶対パス**で渡す（エージェントや CLI の CWD が親と一致する保証がないため）。`<review-perspectives>` には本 SKILL.md 冒頭の「レビュー観点」セクションの表を**そのまま転記して**展開する（観点表の定義は 1 箇所に保つため、プロンプト内には重複記載しない）。
 
-#### 4-B. Codex レビュー（Skill ツールで `/codex-review` を起動）
+#### 4-A. Antigravity (agy) レビュー（出力: `<output-dir>/review-agy.html`）
 
-`Skill` ツールで `codex-review` を呼び出す。`args` には `$ARGUMENTS` をそのまま渡す（PR 番号 / URL / 空文字列）。Codex は内部で差分取得・情報収集・全観点レビューを行い、以下のいずれかに `review-codex.html` を出力する:
+- **実行環境が agy の場合**:
+  - `invoke_subagent` ツール（`TypeName: "self"`, `Role: "Antigravity Code Reviewer"`）が利用可能なら subagent を起動して共通プロンプト（`<output-file> = review-agy.html`）を渡す
+  - subagent を使わない場合は、4-B・4-C のバックグラウンド実行を先に開始した上で、本スキルを実行している agy 自身が本会話内で同じ観点・同じ出力形式でレビューを実施し `<output-dir>/review-agy.html` に Write する（その際、4-B / 4-C の出力はまだ読まない）
+- **実行環境が agy 以外（Claude Code 等）の場合**:
+  - Bash ツールで `agy` CLI を非対話実行する。共通プロンプトを `<output-dir>/prompt-agy.txt` に書き出し、以下を実行する（`</dev/null` で stdin 待ちハングを防ぐ）:
+    ```bash
+    agy -p --mode auto --dangerously-skip-permissions "$(cat <output-dir 絶対パス>/prompt-agy.txt)" </dev/null
+    ```
 
-- PR モード: `tmp/prs/<PR 番号>/review-codex.html`
-- ローカルモード: `tmp/issues/<issue 番号>/review-codex.html`
+#### 4-B. Claude (fable) レビュー（出力: `<output-dir>/review-claude.html`）
+
+- **実行環境が Claude Code（`subagent_type` を取る Agent ツールがある）の場合**:
+  - Agent ツールで `subagent_type: dev-fable-xhigh`（tier 指定がある場合は `S` → `dev-opus-medium`、`M` → `dev-opus-high`、`L` / `XL` / 省略時 → `dev-fable-xhigh`、`fixed:<model>/<effort>` → `dev-<model>-<effort>`。`model` 引数は渡さない）を起動し、共通プロンプト（`<output-file> = review-claude.html`）を実行させる
+- **実行環境が Claude Code 以外（agy 等）の場合**:
+  - 共通プロンプト（`<output-file> = review-claude.html`）を `<output-dir>/prompt-claude.txt` に Write し、Bash ツールで `claude` CLI を `claude-fable-5-1`（effort `xhigh`）で非対話実行する（`</dev/null` で stdin を閉じる）:
+    ```bash
+    claude -p --model claude-fable-5-1 --effort xhigh --dangerously-skip-permissions --allowedTools "Read,Write,Grep,Glob,Bash(git grep:*),Bash(rg:*)" "$(cat <output-dir 絶対パス>/prompt-claude.txt)" </dev/null
+    ```
+
+#### 4-C. Codex (astra) レビュー（出力: `<output-dir>/review-codex.html`）
+
+- **Skill ツールがある場合（Claude Code 等）**:
+  - `Skill` ツールで `codex-review` を呼び出す。`args` には `$ARGUMENTS` の `<対象>`（PR 番号 / URL / 空文字列）を渡す
+- **Skill ツールが無い場合（agy 等）**:
+  - `skills/codex-review/SKILL.md` の手順に従い、`skills/codex-review/scripts/run-codex-review.sh --base origin/<BASE>`（`--model gpt-6-astra` がデフォルト適用される）を Bash で実行し、その stdout の指摘内容を `skills/codex-review/assets/template.html` に準拠した HTML として `<output-dir>/review-codex.html` に書き出す
 
 #### 並列発行の方法
 
-同一メッセージ内で `Agent` ツール（4-A）と `Skill` ツール（4-B）を同時に発行する。両者の完了を待ってから次のステップへ進む。
+- **Claude Code 環境**: 同一メッセージ内で `Agent` ツール（4-B）、`Bash` ツール（4-A の `agy -p`）、`Skill` ツール（4-C の `codex-review`）を同時に発行し、3 者の完了を待つ
+- **agy 環境**:
+  - `4-B`（`claude -p ...`）と `4-C`（`run-codex-review.sh ...`）を `run_command`（または `invoke_subagent`）で並列に起動し、その間に `4-A`（agy 自身のレビュー → `review-agy.html` 作成）を実施する
+  - 3 者すべての完了（`review-agy.html`・`review-claude.html`・`review-codex.html` の生成）を確認してからステップ 5 へ進む
 
 ### 5. 結果の統合
 
-メインレビュー（`review-main.html`）と Codex レビュー（`review-codex.html`）の両方を Read し、統合結果を `<output-dir>/review.md` に書き出す(**md が正**。`/quiz` や `/dev` はこちらを読む)。続けて同じ内容を人間用に `<output-dir>/review.html` としてレンダリングする。
+3 者のレビュー結果（`review-agy.html`・`review-claude.html`・`review-codex.html`）をすべて Read し、統合結果を `<output-dir>/review.md` に書き出す(**md が正**。`/quiz` や `/dev` はこちらを読む)。続けて同じ内容を人間用に `<output-dir>/review.html` としてレンダリングする。
 
 統合時のルール:
 
 - **概要**: PR / Issue の概要と変更の骨子（`context.html` を参照）
-- **良い点**: 両レビュアーから上がった良い点を集約し重複を排除
-- **指摘事項**: 重要度別（must / should / nit）にまとめる。各指摘に **レビュアータグ**（`main` / `codex`）を付与。同じ指摘が両方から上がっている場合は統合し、レビュアータグを両方付ける（**両者が独立に指摘 = 確度が高い**として強調表示）。各指摘に観点タグも併記
-- **まとめ**: 総合判断（マージ可否、ブロッカーの有無）。main / Codex の指摘傾向の違い（観点の偏り、見落としの差）にも触れてよい
+- **良い点**: 3 レビュアーから上がった良い点を集約し重複を排除
+- **指摘事項**: 重要度別（must / should / nit）にまとめる。各指摘に **レビュアータグ**（`agy` / `claude` / `codex`）を付与。同じ指摘が複数のレビュアーから上がっている場合は統合し、該当するレビュアータグをすべて付ける（**複数レビュアーが独立に指摘 = 確度が高い**として強調表示。特に 3 者一致・2 者一致を明示）。各指摘に観点タグも併記
+- **まとめ**: 総合判断（マージ可否、ブロッカーの有無）。agy / Claude (fable) / Codex (astra) の指摘傾向の違い（観点の偏り、見落としの差）にも触れてよい
 
-HTML を採用する理由: 重要度の色分け（must=赤 / should=黄 / nit=灰）・レビュアー別バッジ・両者一致指摘の強調・`<details>` 折りたたみなど、Markdown では困難な表現を使うため。
+HTML を採用する理由: 重要度の色分け（must=赤 / should=黄 / nit=灰）・レビュアー別バッジ（`agy` / `claude` / `codex`）・複数一致指摘の強調・`<details>` 折りたたみなど、Markdown では困難な表現を使うため。
 
 統合後の review.md / review.html は以下のセクションを md の見出し(`##`)として含める（html も同構成。テンプレートは置かない）:
 
 - **概要**
-- **サマリ**（must / should / nit の件数、両者一致の件数、main のみ / Codex のみの件数）
+- **サマリ**（must / should / nit の件数、3 者一致 / 2 者一致の件数、agy のみ / claude のみ / codex のみの件数）
 - **良い点**
 - **指摘事項**（must / should / nit を `<h3>` で分け、各指摘にレビュアータグ + 観点タグ）
 - **まとめ**
 
 ### 6. ユーザーへの提示
 
-`review.html` のサマリ（各重要度の件数、両者一致の件数、ブロッカー概要、総合判断）をユーザーに提示する。詳細は `review-main.html` と `review-codex.html` を参照するよう案内する（パスを案内するだけで、ブラウザで開くのは統合結果の `review.html` のみ。`review-main.html` / `review-codex.html` / `context.html` は開かない）。
+`review.html` のサマリ（各重要度の件数、複数一致の件数、ブロッカー概要、総合判断）をユーザーに提示する。詳細は `review-agy.html`・`review-claude.html`・`review-codex.html` を参照するよう案内する（パスを案内するだけで、ブラウザで開くのは統合結果の `review.html` のみ。個別レビューファイルや `context.html` は開かない）。
 
-`<output-dir>/diff.patch` と `<output-dir>/context.html` は中間成果物として残す（後から再確認や再実行のため）。不要なら手動で削除する。
+`<output-dir>/diff.patch` と `<output-dir>/context.html`（および `prompt-*.txt`）は中間成果物として残す（後から再確認や再実行のため）。不要なら手動で削除する。
 
 ## 注意事項
 
-- メインレビュアーと Codex は **独立した視点** として並列で動かす。双方とも全観点を見るが、相互に結果を参照させない（独立性を保つことで見落としを相互補完する）
+- agy・Claude (fable)・Codex (astra) は **独立した視点** として並列で動かす。3 者とも全観点を見るが、相互に結果を参照させない（独立性を保つことで見落としを相互補完する）
 - 指摘には必ず該当ファイルと行番号を含める
 - 指摘ごとに重要度（must / should / nit）を付与する
 - 良い点も積極的にコメントする
 - 軽微なスタイルの指摘はリンターに任せ、レビューでは扱わない
-- 両レビュアーが同じ指摘を独立に挙げた場合は確度が高いとみなし、統合後のレビューで強調する
+- 複数のレビュアーが同じ指摘を独立に挙げた場合は確度が高いとみなし、統合後のレビューで強調する

@@ -1,10 +1,10 @@
 ---
 name: codex-review
-description: Codex 公式プラグイン (codex-plugin-cc) のネイティブレビューでコードレビューを実施する。PR 番号指定時は PR を、無指定時は現在ブランチとベースブランチの差分をレビューする。
+description: Codex 公式プラグイン (codex-plugin-cc) のネイティブレビュー（gpt-6-astra）でコードレビューを実施する。PR 番号指定時は PR を、無指定時は現在ブランチとベースブランチの差分をレビューする。
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
-公式プラグイン `codex@openai-codex` の companion runtime(Codex ネイティブレビュー)にレビューを依頼する。レビュー本体は Codex 側で実施され、Claude Code は「対象の解決 → 実行 → 結果の HTML 整形」のみを担う。実行中のジョブは `/codex:status` で追跡できる。
+公式プラグイン `codex@openai-codex` の companion runtime(Codex ネイティブレビュー、モデル `gpt-6-astra`)にレビューを依頼する。レビュー本体は Codex 側で実施され、呼び出し元 AI は「対象の解決 → 実行 → 結果の HTML 整形」のみを担う。実行中のジョブは `/codex:status` で追跡できる。
 
 ## 引数
 
@@ -34,7 +34,7 @@ allowed-tools: Bash, Read, Write, AskUserQuestion
 
 ### 2. レビュー実行
 
-同梱の `scripts/run-codex-review.sh` が最新のプラグイン実体を解決して `codex-companion.mjs review` を起動する。フォアグラウンドで完了を待つ(`<skill-dir>` は本スキルのディレクトリの絶対パス)。
+同梱の `scripts/run-codex-review.sh` が最新のプラグイン実体を解決して `codex-companion.mjs review --model gpt-6-astra` を起動する。フォアグラウンドで完了を待つ(`<skill-dir>` は本スキルのディレクトリの絶対パス)。
 
 PR(カレント)/ローカルモード:
 

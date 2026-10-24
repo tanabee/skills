@@ -17,8 +17,8 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | implement | `/implement <issue>` | plan に基づいてコードを実装 |
 | create-pr-text | `/create-pr-text <issue>` | Issue と計画から PR タイトル・説明文を作成（PR 自体は作成しない。UI 変更がある場合は before / after 比較テーブルを含める） |
 | test | `/test <issue>` | chrome-devtools でチェックリストに沿ってブラウザ動作確認を実行し、UI 変更があれば前後比較 (compare.html) を生成 |
-| review | `/review <issue> [tier]` | 実行中の AI（メインレビュアー）と Codex CLI を並列実行してコードレビュー（全観点を網羅）し、結果を統合 |
-| codex-review | `/codex-review` | Codex CLI にコードレビューを依頼（`/review` から内部呼び出しされる。単独実行も可） |
+| review | `/review <issue> [tier]` | Antigravity (agy)・Claude (fable)・Codex (astra) の 3 者を並列実行してコードレビュー（全観点を網羅）し、結果を統合 |
+| codex-review | `/codex-review` | Codex CLI (`gpt-6-astra`) にコードレビューを依頼（`/review` から内部呼び出しされる。単独実行も可） |
 | quiz | `/quiz [<issue\|PR>] [interactive]` | 変更内容の解説（explainer）と理解確認クイズを生成。空指定なら現在のブランチ差分が対象 |
 | pr-comment | `/pr-comment <コメントURL>` | PR レビューコメントの妥当性をコードベースで独立検証し、判定（must/should/nit）と返信文案を作成（返信の投稿は行わない） |
 

@@ -52,7 +52,7 @@
 - ダーク基調で作る。ライト対応や切替は不要。配色は `:root` のトークンにまとめる
 - 左右 16px の余白。横スクロールを出さず、390px 幅でも崩さない
 - 目次は `<nav>` 内の `<details>` で作り、h2 (必要なら h3) へのリンクを並べる
-  - 幅 1024px 以上: 本文の左に固定する (`position: sticky; top: 0; max-height: 100vh; overflow-y: auto`)。常に開いた状態にし、`<summary>` は隠す
+  - 幅 1024px 以上: 本文の右に固定する (`position: sticky; top: 0; max-height: 100vh; overflow-y: auto`)。常に開いた状態にし、`<summary>` は隠す
   - 1024px 未満: 本文の上に `position: sticky; top: 0` で置くアコーディオンにする。閉じた状態で始め、`<summary>` (「目次」) で開閉し、リンクを押したら閉じる。開いた時の一覧は `max-height: 70vh` で内側をスクロールさせる
   - 開閉の切替は `matchMedia('(min-width: 1024px)')` を見るインラインスクリプトで `open` を付け外しする
   - 見出しに `scroll-margin-top` を付け、リンク先が固定した目次に隠れないようにする

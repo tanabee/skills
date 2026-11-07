@@ -4,7 +4,7 @@ description: Antigravity (agy)・Claude (fable)・Codex (astra) の 3 者によ�
 allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 ---
 
-**Antigravity (`agy`)**・**Claude (`fable`: `claude-fable-5-1`)**・**Codex (`astra`: `gpt-6-astra`)** の 3 者で並列にコードレビューを行い、結果を統合する。実行環境（agy / Claude Code / Codex CLI 等）を問わず、常にこの 3 レビュアーが独立した視点でレビューを実施する。
+**Antigravity (`agy`: `gemini-4-argon-high`)**・**Claude (`fable`: `claude-fable-5-1`)**・**Codex (`astra`: `gpt-6-astra`)** の 3 者で並列にコードレビューを行い、**本スキルを実行している AI（親）が結果を統合**する。実行環境（agy / Claude Code / Codex CLI 等）を問わず、常にこの 3 レビュアーが独立した視点でレビューを実施する。
 
 **効率化の肝**: 差分取得・PR/Issue 情報収集・ローカル成果物読み込みは**親（本スキル本体）で 1 回だけ**実行し、`diff.patch` と `context.html` としてディスクに書き出す。agy レビュアーと Claude レビュアーはこの 2 ファイルを Read するだけで共通コンテキストを得られる。Codex 側は別レビュアーの独立視点として `/codex-review`（`gpt-6-astra`）を呼び出す。
 
@@ -144,18 +144,18 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 #### 4-A. Antigravity (agy) レビュー（出力: `<output-dir>/review-agy.html`）
 
 - **実行環境が agy の場合**:
-  - `invoke_subagent` ツール（`TypeName: "self"`, `Role: "Antigravity Code Reviewer"`）が利用可能なら subagent を起動して共通プロンプト（`<output-file> = review-agy.html`）を渡す
-  - subagent を使わない場合は、4-B・4-C のバックグラウンド実行を先に開始した上で、本スキルを実行している agy 自身が本会話内で同じ観点・同じ出力形式でレビューを実施し `<output-dir>/review-agy.html` に Write する（その際、4-B / 4-C の出力はまだ読まない）
+  - `invoke_subagent` ツール（`TypeName: "self"`, `Role: "Antigravity Code Reviewer"`）で subagent を起動して共通プロンプト（`<output-file> = review-agy.html`）を渡す（統合を行う親のコンテキストと分離し、独立したレビュアーとして動かす）
+  - subagent が利用できない場合のみ、4-B・4-C のバックグラウンド実行を先に開始した上で、本スキルを実行している agy 自身が本会話内で同じ観点・同じ出力形式でレビューを実施し `<output-dir>/review-agy.html` に Write する（その際、4-B / 4-C の出力はまだ読まない）
 - **実行環境が agy 以外（Claude Code 等）の場合**:
-  - Bash ツールで `agy` CLI を非対話実行する。共通プロンプトを `<output-dir>/prompt-agy.txt` に書き出し、以下を実行する（`</dev/null` で stdin 待ちハングを防ぐ）:
+  - Bash ツールで `agy` CLI（`gemini-4-argon-high`）を非対話実行する。共通プロンプトを `<output-dir>/prompt-agy.txt` に書き出し、以下を実行する（`</dev/null` で stdin 待ちハングを防ぐ）:
     ```bash
-    agy -p --mode auto --dangerously-skip-permissions "$(cat <output-dir 絶対パス>/prompt-agy.txt)" </dev/null
+    agy -p --mode auto --model gemini-4-argon-high --dangerously-skip-permissions "$(cat <output-dir 絶対パス>/prompt-agy.txt)" </dev/null
     ```
 
 #### 4-B. Claude (fable) レビュー（出力: `<output-dir>/review-claude.html`）
 
 - **実行環境が Claude Code（`subagent_type` を取る Agent ツールがある）の場合**:
-  - Agent ツールで `subagent_type: dev-fable-xhigh`（tier 指定がある場合は `S` → `dev-opus-medium`、`M` → `dev-opus-high`、`L` / `XL` / 省略時 → `dev-fable-xhigh`、`fixed:<model>/<effort>` → `dev-<model>-<effort>`。`model` 引数は渡さない）を起動し、共通プロンプト（`<output-file> = review-claude.html`）を実行させる
+  - Agent ツールで `subagent_type: dev-fable-xhigh`（`fixed:<model>/<effort>` 指定時のみ `dev-<model>-<effort>`。`model` 引数は渡さない）を起動し、共通プロンプト（`<output-file> = review-claude.html`）を実行させる
 - **実行環境が Claude Code 以外（agy 等）の場合**:
   - 共通プロンプト（`<output-file> = review-claude.html`）を `<output-dir>/prompt-claude.txt` に Write し、Bash ツールで `claude` CLI を `claude-fable-5-1`（effort `xhigh`）で非対話実行する（`</dev/null` で stdin を閉じる）:
     ```bash
@@ -167,18 +167,18 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 - **Skill ツールがある場合（Claude Code 等）**:
   - `Skill` ツールで `codex-review` を呼び出す。`args` には `$ARGUMENTS` の `<対象>`（PR 番号 / URL / 空文字列）を渡す
 - **Skill ツールが無い場合（agy 等）**:
-  - `skills/codex-review/SKILL.md` の手順に従い、`skills/codex-review/scripts/run-codex-review.sh --base origin/<BASE>`（`--model gpt-6-astra` がデフォルト適用される）を Bash で実行し、その stdout の指摘内容を `skills/codex-review/assets/template.html` に準拠した HTML として `<output-dir>/review-codex.html` に書き出す
+  - 本スキルの隣にある `codex-review` スキル（`<codex-review-dir>` = `<本スキルのディレクトリ>/../codex-review`、例: `.agents/skills/codex-review` または `skills/codex-review`）の `SKILL.md` の手順に従い、`<codex-review-dir>/scripts/run-codex-review.sh --base origin/<BASE>`（`--model gpt-6-astra` がデフォルト適用される）を Bash で実行し、その stdout の指摘内容を `<codex-review-dir>/assets/template.html` に準拠した HTML として `<output-dir>/review-codex.html` に書き出す
 
 #### 並列発行の方法
 
 - **Claude Code 環境**: 同一メッセージ内で `Agent` ツール（4-B）、`Bash` ツール（4-A の `agy -p`）、`Skill` ツール（4-C の `codex-review`）を同時に発行し、3 者の完了を待つ
 - **agy 環境**:
-  - `4-B`（`claude -p ...`）と `4-C`（`run-codex-review.sh ...`）を `run_command`（または `invoke_subagent`）で並列に起動し、その間に `4-A`（agy 自身のレビュー → `review-agy.html` 作成）を実施する
+  - 同一ターン内で `4-A`（`invoke_subagent`）、`4-B`（`run_command` で `claude -p ...`）、`4-C`（`run_command` で `run-codex-review.sh ...`）を並列に起動する
   - 3 者すべての完了（`review-agy.html`・`review-claude.html`・`review-codex.html` の生成）を確認してからステップ 5 へ進む
 
-### 5. 結果の統合
+### 5. 結果の統合（実行中の AI が実施）
 
-3 者のレビュー結果（`review-agy.html`・`review-claude.html`・`review-codex.html`）をすべて Read し、統合結果を `<output-dir>/review.md` に書き出す(**md が正**。`/quiz` や `/dev` はこちらを読む)。続けて同じ内容を人間用に `<output-dir>/review.html` としてレンダリングする。
+本スキルを実行している AI（親）が、3 者のレビュー結果（`review-agy.html`・`review-claude.html`・`review-codex.html`）をすべて Read し、統合結果を `<output-dir>/review.md` に書き出す(**md が正**。`/quiz` や `/dev` はこちらを読む)。続けて同じ内容を人間用に `<output-dir>/review.html` としてレンダリングする。
 
 統合時のルール:
 

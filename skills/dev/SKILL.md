@@ -58,7 +58,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | create-pr-text | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/medium | agent:\<model\>/\<effort\> |
 | test | agent:opus/low ※2 | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
 | review(親: 収集・統合) | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
-| └ Claude レビュアー Agent(review 内) | opus/medium(正確性・副作用のみ) | opus/high | fable/xhigh | fable/xhigh | \<model\>/\<effort\> |
+| └ Claude レビュアー(review 内) | fable/xhigh(正確性・副作用のみ) | fable/xhigh | fable/xhigh | fable/xhigh | \<model\>/\<effort\> |
 | quiz | skip | agent:opus/low | agent:opus/medium | agent:opus/medium | agent:\<model\>/\<effort\> |
 | notify-discord | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
 | dev 本体(状態管理・DoD ゲート・config 学習・質問リレー) | inline(セッションモデル。**Opus 5.5 以上を推奨** ※4) | ← | ← | ← | inline |
@@ -72,7 +72,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 - 「└」の行はサブスキル内部で起動する Agent。research / review が tier 引数から model / effort を決める(subagent_type は同じ `dev-<model>-<effort>`)
 - `fixed:<model>/<effort>` は `dev-<model>-<effort>` で起動する。`<model>` が `opus` / `fable` 以外(定義が無い)か effort が省略された場合は、**Opus 5 に落ちる可能性があるエイリアス起動はせず**、ユーザーに「定義が無い」と報告して停止する(`auto` でも)
 - normal モードで質問が発生しうるステップ(research / plan / implement / test)は「質問リレー」で扱う(後述)。subagent 化のために auto に落とすことはしない
-- 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・L 以上のレビュアー)だけ Fable に残し、作業・診断寄りのステップは Opus に落とす**。Sonnet / Haiku は精度リスクを取ってまで使わず、安くしたければ Opus の effort を下げる。**Opus は 5.5 以上のみ**(Opus 5 以前は性能面で使わない。エージェント定義のフル ID 固定がその担保)
+- 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・コードレビュアー・XL の review-plan / implement)だけ Fable に残し、作業・診断寄りのステップは Opus に落とす**。Sonnet / Haiku は精度リスクを取ってまで使わず、安くしたければ Opus の effort を下げる。**Opus は 5.5 以上のみ**(Opus 5 以前は性能面で使わない。エージェント定義のフル ID 固定がその担保)
 - **implement を Fable から外す根拠**: implement は全ステップ中最大の消費源だが、plan が「探索の代替」になる具体度(正確なパス・シグネチャ・テストケース)まで書けていれば implement に残る判断は少なく、Opus で足りる。plan が具体的になりえない XL だけ Fable に残す(※3)
 - **effort を下げて節約してよいステップ**: 長い文書を一度に書く quiz / create-pr-text / research の執筆部分。**implement と plan では effort を下げない**(前者は減るターンが検証のターンであり、後者は判断の質がそのまま後段にカスケードする)
 
@@ -92,7 +92,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 
 - **判別**: 開始時に利用可能なツールを見て、`subagent_type` を取る Agent ツールが無ければ「Claude Code 以外」。dev-state.json に `runtime` を記録する(Claude Code なら `"claude-code"`、それ以外は環境名。例 `"codex"`)
 - **triage は 3 つとも skip**(tier は主に model 選択に効くもので、inline では判定の価値が薄い)。tier 引数があればそのスキップ集合とループ上限を使い、無ければ **`M` として扱う**(`tier_source: "runtime-default"`。何も skip しない)
-- **各ステップ**: ステップ定義表の順に、サブスキルを本会話内で実行する(Skill ツール相当が無ければサブスキルの SKILL.md を読んでその指示に従う)。`models` は全ステップ `inline` と記録し、並列グループは表の順の直列で実行する。サブスキル内部のファンアウト(research / review)は各 SKILL.md の規定に従う(review は agy・Claude (`claude -p --model claude-fable-5-1 --effort xhigh`)・Codex (`gpt-6-astra`) の 3 者を並列実行)
+- **各ステップ**: ステップ定義表の順に、サブスキルを本会話内で実行する(Skill ツール相当が無ければサブスキルの SKILL.md を読んでその指示に従う)。`models` は全ステップ `inline` と記録し、並列グループは表の順の直列で実行する。サブスキル内部のファンアウト(research / review)は各 SKILL.md の規定に従う(review は agy・Claude (`claude -p --model claude-fable-5-1 --effort xhigh`)・Codex (`gpt-6-astra`) の 3 者を並列実行し、統合は実行中の AI 自身が行う)
 - **質問**: AskUserQuestion 相当の手段があればそれを、無ければ通常のメッセージで質問して回答を待つ。サブスキルも inline なので質問リレーは発生しない(サブスキルが直接質問する)。入力待ちの `waiting` 記録(後述)は同様に行う
 - **省くもの**: セッションモデルの確認(セットアップ質問 3)・エージェント定義の準備(`agents_ready: null`)・タスク管理ツールが無い環境での TaskCreate 系。成果物ビューアは `/open` 相当でブラウザを開けるなら開き、開けなければ各ステップ完了時に成果物パスを案内するだけにする(`viewer: false`)
 - それ以外(ステップ順・前提成果物・ループ・DoD・config 学習・チェックポイント)は Claude Code と同じ

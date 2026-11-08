@@ -78,7 +78,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | --- | --- | --- |
 | `S` | 1〜2 ファイルの定型・局所変更 | research / review-plan / capture / quiz をスキップ。plan は `lite` |
 | `M` | 既存パターンに沿った 1 機能 | 全ステップ。副作用 identifier が無ければ review-plan を自動スキップ |
-| `L` / `XL` | 横断・副作用あり / 設計判断・要件曖昧 | 全ステップ。research / plan / implement / レビュアーを Fable xhigh に（XL の plan は max） |
+| `L` / `XL` | 横断・副作用あり / 設計判断・要件曖昧 | 全ステップ。research / plan / implement を Fable xhigh に（XL の plan は max、レビュアーは Fable high） |
 | `fixed:<model>[/<effort>]` | 判定なし・スキップなし | 全ステップを指定した model / effort で実行。`full` = `fixed:fable/xhigh` |
 
 - **モデルの使い分け**: 全ステップを subagent で実行し、tier × ステップごとに model と effort を `/dev` の実行形態表で決めます。判断が後段にカスケードするステップ（research 本体・plan・コードレビュアー・XL の review-plan / implement）だけ Fable、それ以外（capture / test / create-pr-text / review 統合 / quiz / notify-discord など）は Opus に落として Fable の消費を抑えます。S でもコードレビューの Claude レビュアーは Fable で実行します

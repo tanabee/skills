@@ -155,11 +155,11 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 #### 4-B. Claude (fable) レビュー（出力: `<output-dir>/review-claude.html`）
 
 - **実行環境が Claude Code（`subagent_type` を取る Agent ツールがある）の場合**:
-  - Agent ツールで `subagent_type: dev-fable-xhigh`（`fixed:<model>/<effort>` 指定時のみ `dev-<model>-<effort>`。`model` 引数は渡さない）を起動し、共通プロンプト（`<output-file> = review-claude.html`）を実行させる
+  - Agent ツールで `subagent_type: dev-fable-high`（`fixed:<model>/<effort>` 指定時のみ `dev-<model>-<effort>`。`model` 引数は渡さない）を起動し、共通プロンプト（`<output-file> = review-claude.html`）を実行させる
 - **実行環境が Claude Code 以外（agy 等）の場合**:
-  - 共通プロンプト（`<output-file> = review-claude.html`）を `<output-dir>/prompt-claude.txt` に Write し、Bash ツールで `claude` CLI を `claude-fable-5-1`（effort `xhigh`）で非対話実行する（`</dev/null` で stdin を閉じる）:
+  - 共通プロンプト（`<output-file> = review-claude.html`）を `<output-dir>/prompt-claude.txt` に Write し、Bash ツールで `claude` CLI を `claude-fable-5-1`（effort `high`）で非対話実行する（`</dev/null` で stdin を閉じる）:
     ```bash
-    claude -p --model claude-fable-5-1 --effort xhigh --dangerously-skip-permissions --allowedTools "Read,Write,Grep,Glob,Bash(git grep:*),Bash(rg:*)" "$(cat <output-dir 絶対パス>/prompt-claude.txt)" </dev/null
+    claude -p --model claude-fable-5-1 --effort high --dangerously-skip-permissions --allowedTools "Read,Write,Grep,Glob,Bash(git grep:*),Bash(rg:*)" "$(cat <output-dir 絶対パス>/prompt-claude.txt)" </dev/null
     ```
 
 #### 4-C. Codex (astra) レビュー（出力: `<output-dir>/review-codex.html`）

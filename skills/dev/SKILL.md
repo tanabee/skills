@@ -172,7 +172,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 
 - **URL**: `file://<本スキルの assets/viewer.html の絶対パス>?dir=file://<成果物ディレクトリの絶対パス>/#<page>`(`dir` は末尾 `/` 付き。viewer.html は成果物ディレクトリにコピーしない)
 - **開くタイミング**: dev-state.json を書き出した直後(セットアップ完了時)に `/open <URL>#dashboard` で 1 回開く。以降は各ステップ完了後に `#<page>` 付きで `/open` を呼ぶだけでよい(implement は開始時にも `#implement` で切り替える)。`/open` は同 URL のタブがあればリロード、ハッシュ違いならページ内遷移にするので(open スキルの「開き方」)、タブは増えない
-- **ビューアの挙動**: 先頭の `dashboard` は dev-state.json を描画したページ(進捗バー・ステップ表・ループ・DoD)、`implement` は `diff.patch` を描画した差分ビュー(ファイル一覧・行番号付き unified diff)。3 秒ごとに `dev-state.json` と各成果物を fetch し、未生成はグレー、更新ありは黄、進行中ステップ(`steps` が completed / skipped 以外)は紫のハイライト＋上部バーの実行中ピル＋タブタイトル `▶ <step>`、**ユーザーの回答待ち(`waiting` が非 null)はオレンジで表示し、タブタイトルに ⏸ を付け、全ページ共通の上部バーとダッシュボード先頭に待ちの内容(種別・ステップ・経過時間・要約)を出す**(実行中と見分けるため)。表示中ページが更新されるとスクロール位置を保ってリロードする。open スキルの config に `--allow-file-access-from-files` が必要(open スキルが自動で追記する)
+- **ビューアの挙動**: 先頭の `dashboard` は dev-state.json を描画したページ(進捗バー・ステップ表・ループ・DoD)、`implement` は `diff.patch` を描画した差分ビュー(ファイル一覧・unified/split 切替・シンタックスハイライト・Viewed チェック付き diff)。3 秒ごとに `dev-state.json` と各成果物を fetch し、未生成はグレー、更新ありは黄、進行中ステップ(`steps` が completed / skipped 以外)は紫のハイライト＋上部バーの実行中ピル＋タブタイトル `▶ <step>`、**ユーザーの回答待ち(`waiting` が非 null)はオレンジで表示し、タブタイトルに ⏸ を付け、全ページ共通の上部バーとダッシュボード先頭に待ちの内容(種別・ステップ・経過時間・要約)を出す**(実行中と見分けるため)。表示中ページが更新されるとスクロール位置を保ってリロードする。open スキルの config に `--allow-file-access-from-files` が必要(open スキルが自動で追記する)
 - `/open` が `"browser": "default"` の場合も同じ URL を開くが、既定ブラウザでは `file://` の fetch が効かないため一覧がグレーのままになる。その場合は従来どおり個別 html を `/open` で開く(dev-state.json に `viewer: false` を記録)
 
 | ステップ | page | 備考 |

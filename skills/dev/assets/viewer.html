@@ -8,9 +8,11 @@
 <style>
   :root { --bg:#f6f8fa; --panel:#fff; --text:#1f2328; --muted:#656d76; --accent:#0969da; --border:#d0d7de;
           --ok:#1a7f37; --new:#bf8700; --miss:#c9d1d9; --run:#8250df; --wait:#bc4c00; --del:#cf222e;
-          --add-bg:#dafbe1; --add-ln:#aceebb; --del-bg:#ffebe9; --del-ln:#ffcecb; --hunk-bg:#ddf4ff; }
+          --add-bg:#dafbe1; --add-ln:#aceebb; --del-bg:#ffebe9; --del-ln:#ffcecb; --hunk-bg:#ddf4ff;
+          --hl-kw:#cf222e; --hl-str:#0a3069; --hl-cmt:#6e7781; --hl-num:#0550ae; --hl-fn:#8250df; --hl-typ:#953800; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --border:#30363d; --miss:#30363d; --wait:#f0883e; --del:#f85149;
-          --add-bg:rgba(46,160,67,0.15); --add-ln:rgba(46,160,67,0.3); --del-bg:rgba(248,81,73,0.15); --del-ln:rgba(248,81,73,0.3); --hunk-bg:rgba(56,139,253,0.15); } }
+          --add-bg:rgba(46,160,67,0.15); --add-ln:rgba(46,160,67,0.3); --del-bg:rgba(248,81,73,0.15); --del-ln:rgba(248,81,73,0.3); --hunk-bg:rgba(56,139,253,0.15);
+          --hl-kw:#ff7b72; --hl-str:#a5d6ff; --hl-cmt:#8b949e; --hl-num:#79c0ff; --hl-fn:#d2a8ff; --hl-typ:#ffa657; } }
   * { box-sizing:border-box; }
   html, body { height:100%; margin:0; }
   body { display:flex; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; font-size:13px; }
@@ -63,24 +65,47 @@
   .diff-stat-del { color:var(--del); font-weight:600; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
   .diff-btn { background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer; }
   .diff-btn:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
+  .diff-btn.active { background:color-mix(in srgb, var(--accent) 15%, var(--panel)); border-color:var(--accent); color:var(--accent); font-weight:600; }
+  .diff-seg { display:inline-flex; }
+  .diff-seg .diff-btn { border-radius:0; }
+  .diff-seg .diff-btn:first-child { border-radius:6px 0 0 6px; }
+  .diff-seg .diff-btn:last-child { border-radius:0 6px 6px 0; margin-left:-1px; }
+  .diff-seg .diff-btn.active { position:relative; z-index:1; }
   .diff-toc { display:flex; flex-direction:column; gap:4px; margin-bottom:16px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 12px; }
   .diff-toc-item { display:flex; align-items:center; gap:8px; font-size:12px; text-decoration:none; color:var(--text); padding:3px 4px; border-radius:4px; }
   .diff-toc-item:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
   .diff-toc-item .path { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; flex:1; }
+  .diff-toc-item.viewed .path { color:var(--muted); text-decoration:line-through; }
   .diff-file { background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-bottom:14px; overflow:hidden; }
+  .diff-file.viewed { border-color:color-mix(in srgb, var(--ok) 40%, var(--border)); }
   .diff-file > summary { display:flex; align-items:center; gap:8px; padding:8px 12px; background:color-mix(in srgb, var(--muted) 6%, var(--panel)); border-bottom:1px solid var(--border); cursor:pointer; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; font-weight:600; user-select:none; }
   .diff-file:not([open]) > summary { border-bottom:0; }
-  .diff-file > summary .stats { margin-left:auto; display:flex; gap:6px; font-weight:500; }
+  .diff-file > summary .stats { margin-left:auto; display:flex; gap:6px; font-weight:500; align-items:center; }
+  .diff-viewed { display:inline-flex; align-items:center; gap:4px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:11px; font-weight:500; color:var(--muted); padding:2px 7px; border:1px solid var(--border); border-radius:5px; background:var(--panel); cursor:pointer; margin-left:6px; }
+  .diff-viewed.is-viewed { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); background:color-mix(in srgb, var(--ok) 10%, var(--panel)); font-weight:600; }
+  .diff-viewed input, .diff-check { margin:0; cursor:pointer; accent-color:var(--ok); }
   .diff-wrap { overflow-x:auto; }
   table.diff-tbl { width:100%; border-collapse:collapse; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.45; }
   table.diff-tbl td { padding:0 8px; vertical-align:top; white-space:pre; }
   table.diff-tbl td.ln { width:1%; min-width:42px; text-align:right; color:var(--muted); user-select:none; border-right:1px solid var(--border); padding:0 6px; }
   table.diff-tbl tr.d-hunk td { background:var(--hunk-bg); color:var(--muted); padding:3px 8px; }
-  table.diff-tbl tr.d-add td.code { background:var(--add-bg); }
-  table.diff-tbl tr.d-add td.ln { background:var(--add-ln); color:var(--text); }
-  table.diff-tbl tr.d-del td.code { background:var(--del-bg); }
-  table.diff-tbl tr.d-del td.ln { background:var(--del-ln); color:var(--text); }
+  table.diff-tbl tr.d-add td.code, table.diff-tbl td.d-add.code { background:var(--add-bg); }
+  table.diff-tbl tr.d-add td.ln, table.diff-tbl td.d-add.ln { background:var(--add-ln); color:var(--text); }
+  table.diff-tbl tr.d-del td.code, table.diff-tbl td.d-del.code { background:var(--del-bg); }
+  table.diff-tbl tr.d-del td.ln, table.diff-tbl td.d-del.ln { background:var(--del-ln); color:var(--text); }
   table.diff-tbl tr.d-meta td { color:var(--muted); font-style:italic; }
+  table.diff-tbl.split { table-layout:fixed; }
+  table.diff-tbl.split td.ln { width:44px; min-width:44px; }
+  table.diff-tbl.split td.ln.split-sep { border-left:1px solid var(--border); }
+  table.diff-tbl.split td.code { width:calc(50% - 44px); white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
+  table.diff-tbl td.d-empty { background:color-mix(in srgb, var(--muted) 6%, var(--panel)); }
+  .d-sign { display:inline-block; width:1.2ch; user-select:none; color:var(--muted); }
+  .hl-k { color:var(--hl-kw); }
+  .hl-s { color:var(--hl-str); }
+  .hl-c { color:var(--hl-cmt); font-style:italic; }
+  .hl-n { color:var(--hl-num); }
+  .hl-f { color:var(--hl-fn); }
+  .hl-t { color:var(--hl-typ); }
   .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; }
   .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
   .card .k { color:var(--muted); font-size:11px; }
@@ -135,7 +160,13 @@ const PAGES = [
 const params = new URLSearchParams(location.search);
 let dir = params.get('dir') || new URL('.', location.href).href;   // 同じディレクトリに置けば ?dir= 不要
 if (!dir.endsWith('/')) dir += '/';
-const state = { hashes:{}, seen:{}, current:null, devState:null, diffText:null, collapsedFiles:new Set() };
+const VIEWED_KEY = `dev-viewer:viewed:${dir}`;
+const VIEW_MODE_KEY = 'dev-viewer:diff-view';
+let savedViewed = {}, savedViewMode = 'unified';
+try { savedViewed = JSON.parse(localStorage.getItem(VIEWED_KEY) || '{}') || {}; } catch {}
+try { const m = localStorage.getItem(VIEW_MODE_KEY); if (m === 'split' || m === 'unified') savedViewMode = m; } catch {}
+const state = { hashes:{}, seen:{}, current:null, devState:null, diffText:null, collapsedFiles:new Set(Object.keys(savedViewed)), viewed:savedViewed, diffView:savedViewMode };
+const saveViewed = () => { try { localStorage.setItem(VIEWED_KEY, JSON.stringify(state.viewed)); } catch {} };
 const $ = id => document.getElementById(id);
 const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i); return h >>> 0; };
 window.__viewer = state;
@@ -244,6 +275,85 @@ const badge = st => {
 };
 const fmtDur = ms => ms < 60000 ? `${Math.round(ms/1000)}s` : ms < 3600000 ? `${Math.floor(ms/60000)}m${Math.round(ms%60000/1000).toString().padStart(2,'0')}s` : `${Math.floor(ms/3600000)}h${Math.floor(ms%3600000/60000).toString().padStart(2,'0')}m`;
 const dur = t => { if (!t?.started) return ''; const end = t.finished ? new Date(t.finished) : new Date(); const d = fmtDur(end - new Date(t.started)); return t.finished ? d : `${d}…`; };
+const KW_SET = new Set('const,let,var,function,return,if,else,elif,fi,then,for,in,of,while,do,done,switch,case,esac,break,continue,default,class,interface,type,enum,struct,impl,trait,pub,fn,async,await,import,export,from,as,try,catch,except,finally,throw,raise,new,delete,typeof,instanceof,void,yield,this,super,extends,implements,static,private,protected,public,readonly,abstract,def,pass,lambda,with,global,nonlocal,package,func,defer,go,select,chan,map,use,mod,crate,match,mut,ref,where,local,source,echo,exit,set,unset'.split(','));
+const LIT_SET = new Set('true,false,null,undefined,None,True,False,nil,self,NaN,Infinity'.split(','));
+function detectLang(path) {
+  const ext = (path.split('.').pop() || '').toLowerCase();
+  if (['md','markdown','mdx'].includes(ext)) return 'md';
+  if (['html','htm','xml','svg','vue','svelte'].includes(ext)) return 'html';
+  if (['json','jsonc','jsonl'].includes(ext)) return 'json';
+  if (['yml','yaml'].includes(ext)) return 'yaml';
+  if (['css','scss','less'].includes(ext)) return 'css';
+  if (['sh','bash','zsh','env'].includes(ext) || /(?:^|\/)Dockerfile$/i.test(path)) return 'sh';
+  if (['py','rb','pl','r','toml','conf','ini'].includes(ext)) return 'hash';
+  return 'code';
+}
+function hlTokens(src, re, classify) {
+  let out = '', last = 0, m;
+  re.lastIndex = 0;
+  while ((m = re.exec(src)) !== null) {
+    if (m.index > last) out += esc(src.slice(last, m.index));
+    const cls = classify(m);
+    out += cls ? `<span class="${cls}">${esc(m[0])}</span>` : esc(m[0]);
+    last = re.lastIndex;
+    if (!m[0].length) re.lastIndex++;
+  }
+  if (last < src.length) out += esc(src.slice(last));
+  return out;
+}
+const RE_MD = /(`[^`]+`)|(\*\*[^*]+\*\*|__[^_]+__)|(\[[^\]]+\]\([^)]+\))|(^\s*(?:[-*+]|\d+\.)\s|^\s*>\s)/g;
+const RE_JSON = /("(?:\\.|[^"\\])*")\s*(?=:)|("(?:\\.|[^"\\])*")|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g;
+const RE_YAML = /(#.*$)|(^[\s-]*[A-Za-z0-9_.-]+)(?=\s*:)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\b(true|false|null|yes|no)\b|(-?\b\d+(?:\.\d+)?\b)/g;
+const RE_HTML = /(<!--[\s\S]*?-->)|(<\/?[A-Za-z][A-Za-z0-9:-]*|\/>|>)|(\b[A-Za-z_:][A-Za-z0-9_.:-]*)(?=\s*=)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g;
+const RE_CSS = /(\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(@[a-zA-Z-]+|!important)|(--[a-zA-Z0-9-]+|\b[a-z-]+(?=\s*:))|(#[0-9a-fA-F]{3,8}\b|-?\b\d+(?:\.\d+)?(?:px|em|rem|vh|vw|%|s|ms|deg|fr)?\b)/g;
+const RE_CODE = /(\/\/.*$|\/\*[\s\S]*?\*\/)|(`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(\$\{[^}]+\}|\$[A-Za-z_]\w*|@[A-Za-z_]\w*)|\b(0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b|\b([A-Za-z_$][A-Za-z0-9_$]*)\b(?=(\s*\()?)/g;
+const RE_HASH = /(#.*$)|(`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(\$\{[^}]+\}|\$[A-Za-z_]\w*|@[A-Za-z_]\w*)|\b(0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b|\b([A-Za-z_$][A-Za-z0-9_$]*)\b(?=(\s*\()?)/g;
+function classifyCode(m) {
+  if (m[1]) return 'hl-c';
+  if (m[2]) return 'hl-s';
+  if (m[3]) return 'hl-t';
+  if (m[4]) return 'hl-n';
+  const id = m[5];
+  if (KW_SET.has(id)) return 'hl-k';
+  if (LIT_SET.has(id)) return 'hl-n';
+  if (m[6]) return 'hl-f';
+  if (/^[A-Z]/.test(id)) return 'hl-t';
+  return '';
+}
+function hlCode(src, lang) {
+  if (!src || src.length > 1000) return esc(src);
+  if (lang === 'md') return /^\s*#{1,6}\s/.test(src) ? `<span class="hl-k">${esc(src)}</span>` : hlTokens(src, RE_MD, m => m[1] ? 'hl-s' : m[2] ? 'hl-k' : m[3] ? 'hl-f' : 'hl-n');
+  if (lang === 'json') return hlTokens(src, RE_JSON, m => m[1] ? 'hl-t' : m[2] ? 'hl-s' : m[3] ? 'hl-k' : 'hl-n');
+  if (lang === 'yaml') return hlTokens(src, RE_YAML, m => m[1] ? 'hl-c' : m[2] ? 'hl-t' : m[3] ? 'hl-s' : m[4] ? 'hl-k' : 'hl-n');
+  if (lang === 'html') return hlTokens(src, RE_HTML, m => m[1] ? 'hl-c' : m[2] ? 'hl-k' : m[3] ? 'hl-t' : 'hl-s');
+  if (lang === 'css') return hlTokens(src, RE_CSS, m => m[1] ? 'hl-c' : m[2] ? 'hl-s' : m[3] ? 'hl-k' : m[4] ? 'hl-t' : 'hl-n');
+  if (lang === 'sh' || lang === 'hash') return hlTokens(src, RE_HASH, classifyCode);
+  return hlTokens(src, RE_CODE, classifyCode);
+}
+function renderCodeCell(lineObj, lang, cls = '') {
+  if (!lineObj) return `<td class="ln d-empty${cls}"></td><td class="code d-empty"></td>`;
+  const sign = lineObj.t === 'add' ? '+' : lineObj.t === 'del' ? '-' : ' ';
+  const body = lineObj.c.length > 0 ? lineObj.c.slice(1) : '';
+  const ln = lineObj.t === 'add' ? lineObj.n : lineObj.t === 'del' ? lineObj.o : (cls ? lineObj.n : lineObj.o);
+  return `<td class="ln d-${lineObj.t}${cls}">${ln}</td><td class="code d-${lineObj.t}"><span class="d-sign">${sign}</span>${hlCode(body, lang)}</td>`;
+}
+function toSplitRows(lines) {
+  const rows = [];
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (l.t === 'ctx') { rows.push({ l, r:l }); i++; }
+    else if (l.t === 'meta') { rows.push({ meta:l }); i++; }
+    else {
+      const dels = [], adds = [];
+      while (i < lines.length && (lines[i].t === 'del' || (lines[i].t === 'meta' && !adds.length))) { if (lines[i].t === 'del') dels.push(lines[i]); i++; }
+      while (i < lines.length && (lines[i].t === 'add' || lines[i].t === 'meta')) { if (lines[i].t === 'add') adds.push(lines[i]); i++; }
+      const len = Math.max(dels.length, adds.length);
+      for (let k = 0; k < len; k++) rows.push({ l:dels[k] || null, r:adds[k] || null });
+    }
+  }
+  return rows;
+}
 function parseDiff(raw) {
   if (!raw || !raw.trim()) return [];
   const files = [];
@@ -252,10 +362,11 @@ function parseDiff(raw) {
     if (line.startsWith('diff --git ')) {
       const m = /^diff --git "?a\/([^"]+)"? "?b\/([^"]+)"?$/.exec(line) || /^diff --git (\S+) (\S+)$/.exec(line);
       const a = m ? m[1].replace(/^a\//, '') : '', b = m ? m[2].replace(/^b\//, '') : line.slice(11);
-      cur = { oldPath:a, newPath:b, status:'M', add:0, del:0, binary:false, hunks:[] };
+      cur = { oldPath:a, newPath:b, status:'M', add:0, del:0, binary:false, hunks:[], rawLines:[line] };
       files.push(cur); hunk = null; continue;
     }
     if (!cur) continue;
+    cur.rawLines.push(line);
     if (!hunk) {
       if (line.startsWith('new file mode')) cur.status = 'A';
       else if (line.startsWith('deleted file mode')) cur.status = 'D';
@@ -276,7 +387,22 @@ function parseDiff(raw) {
     else if (line.startsWith('\\')) { hunk.lines.push({ t:'meta', o:'', n:'', c:line }); }
     else if (line.startsWith(' ') || line === '') { hunk.lines.push({ t:'ctx', o:oldLn++, n:newLn++, c:line || ' ' }); }
   }
+  for (const f of files) { f.hash = hash(f.rawLines.join('\n')); delete f.rawLines; }
   return files;
+}
+function setDiffView(mode) {
+  state.diffView = mode;
+  try { localStorage.setItem(VIEW_MODE_KEY, mode); } catch {}
+  renderDiff();
+}
+function toggleViewed(idx, checked) {
+  const el = document.getElementById(`diff-f-${idx}`);
+  if (!el) return;
+  const pathKey = el.dataset.path, fHash = Number(el.dataset.hash);
+  if (checked) { state.viewed[pathKey] = fHash; state.collapsedFiles.add(pathKey); }
+  else { delete state.viewed[pathKey]; state.collapsedFiles.delete(pathKey); }
+  saveViewed();
+  renderDiff();
 }
 function toggleAllDiff(open) {
   document.querySelectorAll('#diff details.diff-file').forEach(d => {
@@ -299,19 +425,46 @@ function renderDiff() {
     box.innerHTML = `${runBanner}<p class="note">${isRun ? 'まだ差分が出力されていません。最初の変更・タスク完了後にここに diff が表示されます。' : '差分はありません (diff.patch が空または未生成です)。'}</p>`;
     return;
   }
-  const totalAdd = files.reduce((s, f) => s + f.add, 0), totalDel = files.reduce((s, f) => s + f.del, 0);
-  const stBadge = s => s === 'A' ? '<span class="badge b-done">A</span>' : s === 'D' ? '<span class="badge b-fail">D</span>' : s === 'R' ? '<span class="badge b-run">R</span>' : '<span class="badge b-skip">M</span>';
   const labelOf = f => f.status === 'R' && f.oldPath !== f.newPath ? `${f.oldPath} → ${f.newPath}` : (f.status === 'D' ? f.oldPath : f.newPath);
-  const toc = files.map((f, i) => `<a class="diff-toc-item" href="#diff-f-${i}" onclick="event.preventDefault();document.getElementById('diff-f-${i}')?.scrollIntoView({behavior:'smooth',block:'start'})">${stBadge(f.status)}<span class="path">${esc(labelOf(f))}</span><span class="diff-stat-add">+${f.add}</span><span class="diff-stat-del">-${f.del}</span></a>`).join('');
+  let viewedChanged = false;
+  for (const f of files) {
+    const pk = labelOf(f);
+    if (state.viewed[pk] !== undefined && state.viewed[pk] !== f.hash) {
+      delete state.viewed[pk];
+      state.collapsedFiles.delete(pk);
+      viewedChanged = true;
+    }
+  }
+  if (viewedChanged) saveViewed();
+  const totalAdd = files.reduce((s, f) => s + f.add, 0), totalDel = files.reduce((s, f) => s + f.del, 0);
+  const viewedCount = files.filter(f => state.viewed[labelOf(f)] === f.hash).length;
+  const isSplit = state.diffView === 'split';
+  const stBadge = s => s === 'A' ? '<span class="badge b-done">A</span>' : s === 'D' ? '<span class="badge b-fail">D</span>' : s === 'R' ? '<span class="badge b-run">R</span>' : '<span class="badge b-skip">M</span>';
+  const toc = files.map((f, i) => {
+    const pk = labelOf(f), isV = state.viewed[pk] === f.hash;
+    return `<a class="diff-toc-item${isV ? ' viewed' : ''}" href="#diff-f-${i}" onclick="event.preventDefault();document.getElementById('diff-f-${i}')?.scrollIntoView({behavior:'smooth',block:'start'})"><input type="checkbox" class="diff-check" title="Viewed"${isV ? ' checked' : ''} onclick="event.stopPropagation()" onchange="toggleViewed(${i}, this.checked)">${stBadge(f.status)}<span class="path">${esc(pk)}</span><span class="diff-stat-add">+${f.add}</span><span class="diff-stat-del">-${f.del}</span></a>`;
+  }).join('');
   const cards = files.map((f, i) => {
     const pathKey = labelOf(f);
+    const lang = detectLang(f.newPath || f.oldPath);
+    const isV = state.viewed[pathKey] === f.hash;
     const openAttr = state.collapsedFiles.has(pathKey) ? '' : ' open';
-    const rows = f.binary
-      ? `<tr><td colspan="3" class="muted" style="padding:8px 12px">Binary file changed</td></tr>`
-      : f.hunks.map(h => `<tr class="d-hunk"><td class="ln">…</td><td class="ln">…</td><td class="code">${esc(h.header)}</td></tr>` + h.lines.map(l => `<tr class="d-${l.t}"><td class="ln">${l.o}</td><td class="ln">${l.n}</td><td class="code">${esc(l.c)}</td></tr>`).join('')).join('');
-    return `<details class="diff-file" id="diff-f-${i}" data-path="${esc(pathKey)}"${openAttr} ontoggle="this.open?window.__viewer.collapsedFiles.delete(this.dataset.path):window.__viewer.collapsedFiles.add(this.dataset.path)">
-      <summary>${stBadge(f.status)}<span>${esc(pathKey)}</span><span class="stats"><span class="diff-stat-add">+${f.add}</span><span class="diff-stat-del">-${f.del}</span></span></summary>
-      <div class="diff-wrap"><table class="diff-tbl">${rows}</table></div>
+    let rows = '';
+    if (f.binary) {
+      rows = `<tr><td colspan="${isSplit ? 4 : 3}" class="muted" style="padding:8px 12px">Binary file changed</td></tr>`;
+    } else if (isSplit) {
+      rows = f.hunks.map(h => `<tr class="d-hunk"><td class="ln">…</td><td class="code" colspan="3">${esc(h.header)}</td></tr>` + toSplitRows(h.lines).map(r => r.meta ? `<tr class="d-meta"><td class="ln"></td><td class="code" colspan="3">${esc(r.meta.c)}</td></tr>` : `<tr>${renderCodeCell(r.l, lang)}${renderCodeCell(r.r, lang, ' split-sep')}</tr>`).join('')).join('');
+    } else {
+      rows = f.hunks.map(h => `<tr class="d-hunk"><td class="ln">…</td><td class="ln">…</td><td class="code">${esc(h.header)}</td></tr>` + h.lines.map(l => {
+        if (l.t === 'meta') return `<tr class="d-meta"><td class="ln"></td><td class="ln"></td><td class="code">${esc(l.c)}</td></tr>`;
+        const sign = l.t === 'add' ? '+' : l.t === 'del' ? '-' : ' ';
+        const body = l.c.length > 0 ? l.c.slice(1) : '';
+        return `<tr class="d-${l.t}"><td class="ln">${l.o}</td><td class="ln">${l.n}</td><td class="code"><span class="d-sign">${sign}</span>${hlCode(body, lang)}</td></tr>`;
+      }).join('')).join('');
+    }
+    return `<details class="diff-file${isV ? ' viewed' : ''}" id="diff-f-${i}" data-path="${esc(pathKey)}" data-hash="${f.hash}"${openAttr} ontoggle="this.open?window.__viewer.collapsedFiles.delete(this.dataset.path):window.__viewer.collapsedFiles.add(this.dataset.path)">
+      <summary>${stBadge(f.status)}<span>${esc(pathKey)}</span><span class="stats"><span class="diff-stat-add">+${f.add}</span><span class="diff-stat-del">-${f.del}</span><label class="diff-viewed${isV ? ' is-viewed' : ''}" onclick="event.stopPropagation()"><input type="checkbox"${isV ? ' checked' : ''} onchange="toggleViewed(${i}, this.checked)">Viewed</label></span></summary>
+      <div class="diff-wrap"><table class="diff-tbl${isSplit ? ' split' : ''}">${rows}</table></div>
     </details>`;
   }).join('');
   box.innerHTML = `
@@ -323,7 +476,12 @@ function renderDiff() {
       <span><b>${files.length}</b> files changed</span>
       <span class="diff-stat-add">+${totalAdd}</span>
       <span class="diff-stat-del">-${totalDel}</span>
-      <span style="margin-left:auto;display:flex;gap:6px">
+      <span class="muted">· <b>${viewedCount} / ${files.length}</b> viewed</span>
+      <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+        <span class="diff-seg">
+          <button class="diff-btn${!isSplit ? ' active' : ''}" onclick="setDiffView('unified')">Unified</button>
+          <button class="diff-btn${isSplit ? ' active' : ''}" onclick="setDiffView('split')">Split</button>
+        </span>
         <button class="diff-btn" onclick="toggleAllDiff(true)">すべて展開</button>
         <button class="diff-btn" onclick="toggleAllDiff(false)">すべて折りたたむ</button>
       </span>

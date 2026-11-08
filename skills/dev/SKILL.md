@@ -29,7 +29,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | 5 | triage-promote | `/triage <issue> promote` | triage.json | plan.md | — |
 | 6 | review-plan | `/review-plan <issue>` | review-plan.md/.html | plan.md, checklist.html | — |
 | 7 | capture-before | `/capture <issue> before auto` | screenshots/before/ | checklist.html | — |
-| 8 | implement | `/implement <issue> <mode>`(ループからの再実行は `… <mode> fix`) | コード, implementation-notes.md, report.md/.html | plan.md | — |
+| 8 | implement | `/implement <issue> <mode>`(ループからの再実行は `… <mode> fix`) | コード, diff.patch, implementation-notes.md, report.md/.html | plan.md | — |
 | 9 | create-pr-text | `/create-pr-text <issue>` | pr.md | plan.md, report.md | A |
 | 10 | test | `/test <issue> <mode>` | checklist.html 更新, screenshots/after/, compare.html | checklist.html, implementation-notes.md | A |
 | 11 | review | `/review <issue> <tier>` | review.md/.html | 実装済みコード | — |
@@ -171,8 +171,8 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 ステップごとに html を別タブで開くと、ループの再生成も含めてタブが増え続ける。代わりに本スキルの `assets/viewer.html`(左に成果物一覧、右に iframe)を **issue ごとに 1 タブだけ** 開き、以降はそのタブを使い回す。
 
 - **URL**: `file://<本スキルの assets/viewer.html の絶対パス>?dir=file://<成果物ディレクトリの絶対パス>/#<page>`(`dir` は末尾 `/` 付き。viewer.html は成果物ディレクトリにコピーしない)
-- **開くタイミング**: dev-state.json を書き出した直後(セットアップ完了時)に `/open <URL>#dashboard` で 1 回開く。以降は各ステップ完了後に `#<page>` 付きで `/open` を呼ぶだけでよい。`/open` は同 URL のタブがあればリロード、ハッシュ違いならページ内遷移にするので(open スキルの「開き方」)、タブは増えない
-- **ビューアの挙動**: 先頭の `dashboard` は dev-state.json を描画したページ(進捗バー・ステップ表・ループ・DoD)。3 秒ごとに `dev-state.json` と各 html を fetch し、未生成はグレー、更新ありは黄、進行中ステップ(`steps` が completed / skipped 以外)は紫、**ユーザーの回答待ち(`waiting` が非 null)はオレンジで表示し、タブタイトルに ⏸ を付け、全ページ共通の上部バーとダッシュボード先頭に待ちの内容(種別・ステップ・経過時間・要約)を出す**(実行中と見分けるため)。表示中ページが更新されるとスクロール位置を保ってリロードする。open スキルの config に `--allow-file-access-from-files` が必要(open スキルが自動で追記する)
+- **開くタイミング**: dev-state.json を書き出した直後(セットアップ完了時)に `/open <URL>#dashboard` で 1 回開く。以降は各ステップ完了後に `#<page>` 付きで `/open` を呼ぶだけでよい(implement は開始時にも `#implement` で切り替える)。`/open` は同 URL のタブがあればリロード、ハッシュ違いならページ内遷移にするので(open スキルの「開き方」)、タブは増えない
+- **ビューアの挙動**: 先頭の `dashboard` は dev-state.json を描画したページ(進捗バー・ステップ表・ループ・DoD)、`implement` は `diff.patch` を描画した差分ビュー(ファイル一覧・行番号付き unified diff)。3 秒ごとに `dev-state.json` と各成果物を fetch し、未生成はグレー、更新ありは黄、進行中ステップ(`steps` が completed / skipped 以外)は紫のハイライト＋上部バーの実行中ピル＋タブタイトル `▶ <step>`、**ユーザーの回答待ち(`waiting` が非 null)はオレンジで表示し、タブタイトルに ⏸ を付け、全ページ共通の上部バーとダッシュボード先頭に待ちの内容(種別・ステップ・経過時間・要約)を出す**(実行中と見分けるため)。表示中ページが更新されるとスクロール位置を保ってリロードする。open スキルの config に `--allow-file-access-from-files` が必要(open スキルが自動で追記する)
 - `/open` が `"browser": "default"` の場合も同じ URL を開くが、既定ブラウザでは `file://` の fetch が効かないため一覧がグレーのままになる。その場合は従来どおり個別 html を `/open` で開く(dev-state.json に `viewer: false` を記録)
 
 | ステップ | page | 備考 |
@@ -181,7 +181,8 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 | research | `research` | |
 | plan | `plan` | checklist.html も同時生成されるが plan を表示 |
 | review-plan | `review-plan` | |
-| implement | `report` | |
+| implement(開始時) | `implement` | `diff.patch` を描画。タスク完了ごとに自動更新され、実装中の進行状況と差分を確認できる |
+| implement(完了時) | `report` | `diff.patch` も最終更新される(`implement` タブでいつでも確認可) |
 | test | `checklist` | compare.html があれば `compare` |
 | review | `review` | review-agy / review-claude / review-codex / context は一覧に出さない(中間成果物) |
 | quiz | `quiz` | |
@@ -217,7 +218,7 @@ tier 確定後(tier 引数指定時はセットアップ直後、それ以外は
 2. **前提成果物の確認**: 表の「前提成果物」が存在するか確認する。存在しない場合(スキップや前回実行の欠如による):
    - サブスキル側に fallback があればそれに委ねる
    - fallback が無い場合 — `auto`: 警告を dev-state.json に記録し、続行可能なら続行、不可能ならそのステップもスキップ扱いにする。`normal`: ユーザーに続行可否を確認する
-3. **実行**: 実行形態表に従って Agent ツールで起動する(`subagent_type: dev-<model>-<effort>`。後述「agent ステップの依頼形式」)。normal で `status: needs-input` が返ったら「質問リレー」で回答を戻して再開する
+3. **実行**: 実行形態表に従って Agent ツールで起動する(`subagent_type: dev-<model>-<effort>`。後述「agent ステップの依頼形式」)。`implement` は起動直前(`steps.implement` を `in_progress` に更新した直後)にも `/open <ビューア URL>#implement` を呼んで `implement` タブに切り替える。normal で `status: needs-input` が返ったら「質問リレー」で回答を戻して再開する
 4. **ビューアの切り替え**: 個別の `.html` は開かない。ステップ完了後に Skill ツールで `/open <ビューア URL>#<page>` を呼び、「成果物ビューア」の該当ページに切り替える(page はステップ → page 表のとおり。ループでの再生成・更新時も同様。ビューアは変更を自動検知して表示中ページをリロードするので、切り替え以外の操作は不要)
 5. **チェックポイント判定**: 指定されていれば停止する(「チェックポイント停止の挙動」参照)
 

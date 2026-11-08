@@ -23,7 +23,7 @@ GitHub issue ( $ARGUMENTS ) の内容をもとに実装を行う。
 
 1. 渡された失敗・指摘の内容と、`plan.md` の該当タスク・`implementation-notes.md` を読む
 2. **原因を特定してから直す**。症状を隠す変更(テストの期待値を緩める、条件を特別扱いする等)はしない
-3. 直した内容を `implementation-notes.md` の `## Fixes` セクションに「何が失敗していたか / 原因 / 修正内容 / ラウンド番号」で記録する
+3. 直した内容を `implementation-notes.md` の `## Fixes` セクションに「何が失敗していたか / 原因 / 修正内容 / ラウンド番号」で記録し、`tmp/issues/<issue番号>/diff.patch` を更新する(後述「diff.patch の更新」)
 4. **計画自体に手を入れない**。plan.md の編集は `/plan` の責務
 
 ### エスカレーション(計画の欠陥だと判断した場合)
@@ -50,6 +50,19 @@ GitHub issue ( $ARGUMENTS ) の内容をもとに実装を行う。
 - 発見したエッジケース・後続ステップへの注意点は `## Notes` セクションに記録する
 - 修正モードでの修正は `## Fixes` セクションに記録する(ラウンド番号を含める。同じ箇所の再発を検出するために使う)
 - 事後にまとめて書くのではなく、**発生の都度追記する**(コンテキスト圧縮や中断を跨いでも判断の履歴が残るように)
+
+## diff.patch の更新(ビューアの implement タブ用)
+
+`/dev` の成果物ビューア(`viewer.html#implement`)が実装中の進捗と差分をリアルタイムに表示できるよう、以下のタイミングで `tmp/issues/<issue番号>/diff.patch` を書き出す:
+
+- **各タスクの完了時**(手順 6 の直後)
+- **全タスク完了・レポート出力時**(手順 8 の前、および `fix` モードの修正完了時)
+
+ベースブランチ `<base>` は `tmp/config.json` の `base_branch` を読む(無ければ `git remote show origin` の HEAD branch を検出して保存)。本スキルはコミットを行わないため、**未コミットの変更と新規作成(untracked)ファイルの両方**を含めて出力する:
+
+```bash
+{ git diff "$(git merge-base HEAD origin/<base> 2>/dev/null || echo HEAD)" -- . ':!tmp'; git ls-files --others --exclude-standard -- . ':!tmp' | while IFS= read -r f; do git diff --no-index /dev/null "$f" || true; done; } > tmp/issues/<issue番号>/diff.patch
+```
 
 ## タスク管理
 
@@ -79,8 +92,8 @@ GitHub issue ( $ARGUMENTS ) の内容をもとに実装を行う。
 3. implementation-notes.md を作成する(上記参照)
 4. plan.md のタスク・フェーズ構成を読み込み、`TaskCreate` で実装タスクを一括登録する
 5. `plan.md` のタスクを上から順に実装する。各タスクの影響範囲に記載されたファイルを確認してから変更する。計画とのズレが出たら implementation-notes.md に記録する
-6. 各タスクの完了条件を満たしていることを確認し、`/simplify` スキルでコードを整理した後、次のタスクに進む
-7. 全タスク完了後、既存のテストがあれば実行して通ることを確認する
+6. 各タスクの完了条件を満たしていることを確認し、`/simplify` スキルでコードを整理した後、`tmp/issues/<issue番号>/diff.patch` を更新して次のタスクに進む
+7. 全タスク完了後、既存のテストがあれば実行して通ることを確認し、`tmp/issues/<issue番号>/diff.patch` を最終更新する
 8. 実装の解説を `tmp/issues/<issue番号>/report.md` に書き出す(**md が正**。`/review` / `/quiz` / `/create-pr-text` はこちらを読む。implementation-notes.md を材料にする)。続けて同じ内容を人間用に `report.html` としてレンダリングする(タスクのカード化・テスト結果の色分けなどはこちらに)。更新時は **md → html の順で両方に反映する**
 
 ### 出力構造(必須セクション)

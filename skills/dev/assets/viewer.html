@@ -7,8 +7,10 @@
 <!-- /dev の成果物ビューア。使い方: viewer.html?dir=file:///abs/path/tmp/issues/<issue>/#<page>  (Chrome を --allow-file-access-from-files 付きで起動すること) -->
 <style>
   :root { --bg:#f6f8fa; --panel:#fff; --text:#1f2328; --muted:#656d76; --accent:#0969da; --border:#d0d7de;
-          --ok:#1a7f37; --new:#bf8700; --miss:#c9d1d9; --run:#8250df; --wait:#bc4c00; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --border:#30363d; --miss:#30363d; --wait:#f0883e; } }
+          --ok:#1a7f37; --new:#bf8700; --miss:#c9d1d9; --run:#8250df; --wait:#bc4c00; --del:#cf222e;
+          --add-bg:#dafbe1; --add-ln:#aceebb; --del-bg:#ffebe9; --del-ln:#ffcecb; --hunk-bg:#ddf4ff; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --border:#30363d; --miss:#30363d; --wait:#f0883e; --del:#f85149;
+          --add-bg:rgba(46,160,67,0.15); --add-ln:rgba(46,160,67,0.3); --del-bg:rgba(248,81,73,0.15); --del-ln:rgba(248,81,73,0.3); --hunk-bg:rgba(56,139,253,0.15); } }
   * { box-sizing:border-box; }
   html, body { height:100%; margin:0; }
   body { display:flex; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; font-size:13px; }
@@ -21,14 +23,17 @@
   nav li:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
   nav li.active { border-left-color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); font-weight:600; }
   nav li.missing { color:var(--muted); cursor:default; }
+  nav li.running { color:var(--text); background:color-mix(in srgb, var(--run) 8%, transparent); }
+  nav li.running.active { background:color-mix(in srgb, var(--accent) 12%, transparent); }
   nav li .dot { width:8px; height:8px; border-radius:50%; background:var(--miss); flex:none; }
   nav li.present .dot { background:var(--ok); }
   nav li.updated .dot { background:var(--new); box-shadow:0 0 0 3px color-mix(in srgb, var(--new) 30%, transparent); }
-  nav li.running .dot { background:var(--run); animation:pulse 1.2s infinite; }
+  nav li.running .dot { background:var(--run); box-shadow:0 0 0 3px color-mix(in srgb, var(--run) 30%, transparent); animation:pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity:.3; } }
   nav li.waiting .dot { background:var(--wait); box-shadow:0 0 0 3px color-mix(in srgb, var(--wait) 35%, transparent); animation:blink .9s steps(2, start) infinite; }
   @keyframes blink { to { visibility:hidden; } }
   nav li .step { color:var(--muted); font-size:11px; margin-left:auto; }
+  nav li.running .step { color:var(--run); font-weight:600; }
   nav li.waiting .step { color:var(--wait); font-weight:600; }
   nav.waiting header { background:color-mix(in srgb, var(--wait) 12%, transparent); border-bottom-color:var(--wait); }
   nav footer { padding:8px 14px; border-top:1px solid var(--border); color:var(--muted); font-size:11px; display:flex; gap:8px; align-items:center; }
@@ -39,15 +44,43 @@
   main .bar a { color:var(--accent); text-decoration:none; margin-left:auto; }
   .waitpill { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:12px; background:var(--wait); color:#fff; font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60%; }
   .waitpill[hidden] { display:none; }
+  .runpill { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:12px; background:color-mix(in srgb, var(--run) 18%, transparent); color:var(--run); font-weight:600; font-size:12px; white-space:nowrap; cursor:pointer; }
+  .runpill .dot { width:7px; height:7px; border-radius:50%; background:var(--run); animation:pulse 1.2s infinite; }
+  .runpill[hidden] { display:none; }
   .banner { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:baseline; padding:12px 16px; margin-bottom:16px; border-radius:8px; border:1px solid var(--wait); background:color-mix(in srgb, var(--wait) 12%, transparent); }
   .banner b { color:var(--wait); font-size:14px; }
   .banner .note { flex-basis:100%; }
+  .runbanner { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; padding:10px 14px; margin-bottom:14px; border-radius:8px; border:1px solid var(--run); background:color-mix(in srgb, var(--run) 10%, transparent); }
+  .runbanner b { color:var(--run); }
   iframe { flex:1; border:0; width:100%; background:#fff; }
   .empty { flex:1; display:grid; place-items:center; color:var(--muted); }
-  #dash { flex:1; overflow:auto; padding:20px 24px; }
-  #dash[hidden] { display:none; }
+  #dash, #diff { flex:1; overflow:auto; padding:20px 24px; }
+  #dash[hidden], #diff[hidden] { display:none; }
   #dash h2 { font-size:15px; margin:22px 0 8px; }
   #dash h2:first-child { margin-top:0; }
+  .diff-bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:12px; }
+  .diff-stat-add { color:var(--ok); font-weight:600; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .diff-stat-del { color:var(--del); font-weight:600; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .diff-btn { background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer; }
+  .diff-btn:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
+  .diff-toc { display:flex; flex-direction:column; gap:4px; margin-bottom:16px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 12px; }
+  .diff-toc-item { display:flex; align-items:center; gap:8px; font-size:12px; text-decoration:none; color:var(--text); padding:3px 4px; border-radius:4px; }
+  .diff-toc-item:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
+  .diff-toc-item .path { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; flex:1; }
+  .diff-file { background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-bottom:14px; overflow:hidden; }
+  .diff-file > summary { display:flex; align-items:center; gap:8px; padding:8px 12px; background:color-mix(in srgb, var(--muted) 6%, var(--panel)); border-bottom:1px solid var(--border); cursor:pointer; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; font-weight:600; user-select:none; }
+  .diff-file:not([open]) > summary { border-bottom:0; }
+  .diff-file > summary .stats { margin-left:auto; display:flex; gap:6px; font-weight:500; }
+  .diff-wrap { overflow-x:auto; }
+  table.diff-tbl { width:100%; border-collapse:collapse; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.45; }
+  table.diff-tbl td { padding:0 8px; vertical-align:top; white-space:pre; }
+  table.diff-tbl td.ln { width:1%; min-width:42px; text-align:right; color:var(--muted); user-select:none; border-right:1px solid var(--border); padding:0 6px; }
+  table.diff-tbl tr.d-hunk td { background:var(--hunk-bg); color:var(--muted); padding:3px 8px; }
+  table.diff-tbl tr.d-add td.code { background:var(--add-bg); }
+  table.diff-tbl tr.d-add td.ln { background:var(--add-ln); color:var(--text); }
+  table.diff-tbl tr.d-del td.code { background:var(--del-bg); }
+  table.diff-tbl tr.d-del td.ln { background:var(--del-ln); color:var(--text); }
+  table.diff-tbl tr.d-meta td { color:var(--muted); font-style:italic; }
   .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; }
   .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
   .card .k { color:var(--muted); font-size:11px; }
@@ -80,8 +113,9 @@
   <footer><label><input type="checkbox" id="auto" checked> 自動更新</label><span id="status"></span></footer>
 </nav>
 <main>
-  <div class="bar"><span>表示中:</span><b id="cur">—</b><span id="curStep"></span><span id="waitBar" class="waitpill" hidden></span><a id="raw" target="_blank">別タブで開く ↗</a></div>
+  <div class="bar"><span>表示中:</span><b id="cur">—</b><span id="curStep"></span><span id="runBar" class="runpill" hidden></span><span id="waitBar" class="waitpill" hidden></span><a id="raw" target="_blank">別タブで開く ↗</a></div>
   <div id="dash" hidden></div>
+  <div id="diff" hidden></div>
   <iframe id="frame" hidden></iframe>
   <div class="empty" id="empty">左の一覧から成果物を選択</div>
 </main>
@@ -92,6 +126,7 @@ const PAGES = [
   { key:'plan',        label:'plan',        file:'plan.html',                step:'plan' },
   { key:'checklist',   label:'checklist',   file:'checklist.html',           step:'plan' },
   { key:'review-plan', label:'review-plan', file:'review-plan.html',         step:'review-plan' },
+  { key:'implement',   label:'implement',   file:'diff.patch',               step:'implement', diff:true },
   { key:'report',      label:'report',      file:'report.html',              step:'implement' },
   { key:'compare',     label:'compare',     file:'screenshots/compare.html', step:'test' },
   { key:'review',      label:'review',      file:'review.html',              step:'review' },
@@ -100,18 +135,26 @@ const PAGES = [
 const params = new URLSearchParams(location.search);
 let dir = params.get('dir') || new URL('.', location.href).href;   // 同じディレクトリに置けば ?dir= 不要
 if (!dir.endsWith('/')) dir += '/';
-const state = { hashes:{}, seen:{}, current:null, devState:null };
+const state = { hashes:{}, seen:{}, current:null, devState:null, diffText:null, collapsedFiles:new Set() };
 const $ = id => document.getElementById(id);
 const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i); return h >>> 0; };
 window.__viewer = state;
 
-async function probe(file) {
-  try { const r = await fetch(dir + file, { cache:'no-store' }); if (!r.ok) return null; return hash(await r.text()); }
-  catch { return null; }
+async function probe(file, isDiff) {
+  try {
+    const r = await fetch(dir + file, { cache:'no-store' });
+    if (!r.ok) { if (isDiff) state.diffText = null; return null; }
+    const t = await r.text();
+    if (isDiff) state.diffText = t;
+    return hash(t);
+  } catch {
+    if (isDiff) state.diffText = null;
+    return null;
+  }
 }
 async function poll() {
   try { const r = await fetch(dir + 'dev-state.json', { cache:'no-store' }); state.devState = r.ok ? await r.json() : null; } catch { state.devState = null; }
-  const results = await Promise.all(PAGES.map(p => p.file ? probe(p.file) : Promise.resolve(state.devState ? hash(JSON.stringify(state.devState)) : null)));
+  const results = await Promise.all(PAGES.map(p => p.file ? probe(p.file, p.diff) : Promise.resolve(state.devState ? hash(JSON.stringify(state.devState)) : null)));
   let changedCurrent = false;
   PAGES.forEach((p, i) => {
     const h = results[i];
@@ -119,12 +162,18 @@ async function poll() {
     state.hashes[p.key] = h;
   });
   render();
-  if (changedCurrent && $('auto').checked) { if (state.current === 'dashboard') { renderDash(); state.seen.dashboard = true; } else reloadFrame(); }
-  else if (state.current === 'dashboard' && state.devState && (waiting() || STEPS.some(k => state.devState.steps?.[k] && !/^(completed|skipped)/.test(state.devState.steps[k])))) renderDash();
+  if (changedCurrent && $('auto').checked) {
+    if (state.current === 'dashboard') { renderDash(); state.seen.dashboard = true; }
+    else if (state.current === 'implement') { renderDiff(); state.seen.implement = true; }
+    else reloadFrame();
+  }
+  else if (state.current === 'dashboard' && state.devState && (waiting() || runningStep())) renderDash();
+  else if (state.current === 'implement' && state.devState) renderDiff();
   $('status').textContent = new Date().toLocaleTimeString('ja-JP');
 }
 const WAIT_KINDS = { question:'サブスキルからの質問(質問リレー)', checkpoint:'チェックポイント停止', 'tier-confirm':'tier 確定の確認', prerequisite:'前提成果物欠如の確認', 'config-approval':'config 追記の承認', 'loop-limit':'ループ上限 / DoD 未充足の報告', resume:'再開の確認' };
 const waiting = () => { const w = state.devState?.waiting; return w && typeof w === 'object' ? w : null; };
+const runningStep = () => STEPS.find(k => state.devState?.steps?.[k] && !/^(completed|skipped)/.test(state.devState.steps[k])) || null;
 const waitLabel = w => WAIT_KINDS[w.kind] || w.kind || '回答待ち';
 const waitSince = w => w.since && !isNaN(new Date(w.since)) ? fmtDur(Math.max(0, Date.now() - new Date(w.since))) : '';
 function stepStatus(step) {
@@ -132,18 +181,27 @@ function stepStatus(step) {
   const s = step && state.devState?.steps?.[step]; if (!s) return '';
   return s.startsWith('completed') ? 'done' : s.startsWith('skipped') ? 'skip' : s;
 }
+const isAvail = p => p && (state.hashes[p.key] != null || (p.diff && !!stepStatus(p.step) && !/^(done|skip)$/.test(stepStatus(p.step))));
 function renderWaiting() {
-  const w = waiting(), ds = state.devState;
+  const w = waiting(), run = runningStep(), ds = state.devState;
   const base = ds ? `issue #${ds.issue ?? '?'} · dev viewer` : 'dev viewer';
-  document.title = w ? `⏸ ${base}` : base;
+  document.title = w ? `⏸ ${base}` : run ? `▶ ${run} · ${base}` : base;
   document.querySelector('nav').classList.toggle('waiting', !!w);
   const pill = $('waitBar');
   pill.hidden = !w;
   if (w) { const t = waitSince(w); pill.textContent = `⏸ 回答待ち: ${waitLabel(w)}${w.step ? ` (${w.step})` : ''}${t ? ` · ${t}` : ''}`; pill.title = w.summary || ''; }
+  const rpill = $('runBar');
+  rpill.hidden = !!w || !run;
+  if (!w && run) {
+    const d = dur(ds?.timings?.[run]);
+    rpill.innerHTML = `<span class="dot"></span><span>実行中: ${esc(run)}${d ? ` · ${esc(d)}` : ''}</span>`;
+    const target = PAGES.find(p => p.step === run && isAvail(p)) || PAGES[0];
+    rpill.onclick = () => target && show(target.key);
+  }
 }
 function render() {
-  const ds = state.devState;
-  if (ds) { $('title').innerHTML = issueLink(ds, `issue #${esc(ds.issue)}`); $('meta').textContent = [ds.tier, ds.mode, waiting() ? '⏸ 回答待ち' : ds.status].filter(Boolean).join(' / '); }
+  const ds = state.devState, run = runningStep();
+  if (ds) { $('title').innerHTML = issueLink(ds, `issue #${esc(ds.issue)}`); $('meta').textContent = [ds.tier, ds.mode, waiting() ? '⏸ 回答待ち' : ds.status || (run ? `▶ ${run}` : '')].filter(Boolean).join(' / '); }
   else { $('title').textContent = decodeURIComponent(dir.split('/').filter(Boolean).pop() || 'dev viewer'); $('meta').textContent = 'dev-state.json なし'; }
   const nothing = PAGES.every(p => state.hashes[p.key] == null);
   $('empty').textContent = nothing && !ds ? '成果物を読めません。?dir= のパスと、Chrome を --allow-file-access-from-files 付きで起動しているか確認してください' : '左の一覧から成果物を選択';
@@ -151,12 +209,16 @@ function render() {
   for (const p of PAGES) {
     const li = document.createElement('li');
     const present = state.hashes[p.key] !== null && state.hashes[p.key] !== undefined;
+    const avail = isAvail(p);
     const st = stepStatus(p.step);
-    li.className = [present ? 'present' : 'missing', present && state.seen[p.key] === false ? 'updated' : '', st === 'waiting' ? 'waiting' : st && st !== 'done' && st !== 'skip' ? 'running' : '', state.current === p.key ? 'active' : ''].join(' ');
+    const isRun = st && st !== 'done' && st !== 'skip' && st !== 'waiting';
+    li.className = [avail ? 'present' : 'missing', present && state.seen[p.key] === false ? 'updated' : '', st === 'waiting' ? 'waiting' : isRun ? 'running' : '', state.current === p.key ? 'active' : ''].join(' ');
     li.innerHTML = `<span class="dot"></span><span>${p.label}</span><span class="step">${st}</span>`;
-    if (present) li.onclick = () => show(p.key);
+    if (avail) li.onclick = () => show(p.key);
     $('list').appendChild(li);
   }
+  const curPage = PAGES.find(x => x.key === state.current);
+  if (curPage && curPage.file) $('curStep').textContent = stepStatus(curPage.step) ? `(${curPage.step}: ${stepStatus(curPage.step)})` : '';
   renderWaiting();
 }
 function show(key) {
@@ -164,8 +226,9 @@ function show(key) {
   state.current = key; state.seen[key] = true;
   location.hash = key;
   $('empty').hidden = true;
-  if (!p.file) { $('frame').hidden = true; $('dash').hidden = false; $('raw').hidden = true; $('cur').textContent = 'dev-state.json'; $('curStep').textContent = ''; renderDash(); render(); return; }
-  $('frame').hidden = false; $('dash').hidden = true; $('raw').hidden = false;
+  if (!p.file) { $('frame').hidden = true; $('dash').hidden = false; $('diff').hidden = true; $('raw').hidden = true; $('cur').textContent = 'dev-state.json'; $('curStep').textContent = ''; renderDash(); render(); return; }
+  if (p.diff) { $('frame').hidden = true; $('dash').hidden = true; $('diff').hidden = false; $('raw').hidden = state.hashes[key] == null; $('raw').href = dir + p.file; $('cur').textContent = p.file; $('curStep').textContent = stepStatus(p.step) ? `(${p.step}: ${stepStatus(p.step)})` : ''; renderDiff(); render(); return; }
+  $('frame').hidden = false; $('dash').hidden = true; $('diff').hidden = true; $('raw').hidden = false;
   $('frame').src = dir + p.file; $('raw').href = dir + p.file;
   $('cur').textContent = p.file; $('curStep').textContent = stepStatus(p.step) ? `(${p.step}: ${stepStatus(p.step)})` : '';
   render();
@@ -181,11 +244,99 @@ const badge = st => {
 };
 const fmtDur = ms => ms < 60000 ? `${Math.round(ms/1000)}s` : ms < 3600000 ? `${Math.floor(ms/60000)}m${Math.round(ms%60000/1000).toString().padStart(2,'0')}s` : `${Math.floor(ms/3600000)}h${Math.floor(ms%3600000/60000).toString().padStart(2,'0')}m`;
 const dur = t => { if (!t?.started) return ''; const end = t.finished ? new Date(t.finished) : new Date(); const d = fmtDur(end - new Date(t.started)); return t.finished ? d : `${d}…`; };
+function parseDiff(raw) {
+  if (!raw || !raw.trim()) return [];
+  const files = [];
+  let cur = null, hunk = null, oldLn = 0, newLn = 0;
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      const m = /^diff --git "?a\/([^"]+)"? "?b\/([^"]+)"?$/.exec(line) || /^diff --git (\S+) (\S+)$/.exec(line);
+      const a = m ? m[1].replace(/^a\//, '') : '', b = m ? m[2].replace(/^b\//, '') : line.slice(11);
+      cur = { oldPath:a, newPath:b, status:'M', add:0, del:0, binary:false, hunks:[] };
+      files.push(cur); hunk = null; continue;
+    }
+    if (!cur) continue;
+    if (!hunk) {
+      if (line.startsWith('new file mode')) cur.status = 'A';
+      else if (line.startsWith('deleted file mode')) cur.status = 'D';
+      else if (line.startsWith('rename from ')) { cur.status = 'R'; cur.oldPath = line.slice(12).trim(); }
+      else if (line.startsWith('rename to ')) { cur.status = 'R'; cur.newPath = line.slice(10).trim(); }
+      else if (line.startsWith('--- ')) { const p = line.slice(4).trim(); if (p === '/dev/null') cur.status = 'A'; else cur.oldPath = p.replace(/^"?a\//, '').replace(/"$/, ''); }
+      else if (line.startsWith('+++ ')) { const p = line.slice(4).trim(); if (p === '/dev/null') cur.status = 'D'; else cur.newPath = p.replace(/^"?b\//, '').replace(/"$/, ''); }
+      else if (line.startsWith('Binary files ') || line.startsWith('GIT binary patch')) cur.binary = true;
+    }
+    const hm = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/.exec(line);
+    if (hm) {
+      oldLn = Number(hm[1]); newLn = Number(hm[2]);
+      hunk = { header:line, lines:[] }; cur.hunks.push(hunk); continue;
+    }
+    if (!hunk) continue;
+    if (line.startsWith('+')) { cur.add++; hunk.lines.push({ t:'add', o:'', n:newLn++, c:line }); }
+    else if (line.startsWith('-')) { cur.del++; hunk.lines.push({ t:'del', o:oldLn++, n:'', c:line }); }
+    else if (line.startsWith('\\')) { hunk.lines.push({ t:'meta', o:'', n:'', c:line }); }
+    else if (line.startsWith(' ') || line === '') { hunk.lines.push({ t:'ctx', o:oldLn++, n:newLn++, c:line || ' ' }); }
+  }
+  return files;
+}
+function toggleAllDiff(open) {
+  document.querySelectorAll('#diff details.diff-file').forEach(d => {
+    d.open = open;
+    if (open) state.collapsedFiles.delete(d.dataset.path); else state.collapsedFiles.add(d.dataset.path);
+  });
+}
+function renderDiff() {
+  const box = $('diff'), sy = box.scrollTop;
+  const ds = state.devState, st = ds?.steps?.implement, w = waiting();
+  const isRun = st && !/^(completed|skipped)/.test(st);
+  const t = dur(ds?.timings?.implement), m = ds?.models?.implement;
+  const runBanner = w && w.step === 'implement'
+    ? `<div class="banner"><b>⏸ ユーザーの回答待ち (implement)</b><span>${esc(waitLabel(w))}</span>${w.summary ? `<span class="note">${esc(w.summary)}</span>` : ''}</div>`
+    : isRun
+    ? `<div class="runbanner"><b>▶ implement 実行中</b>${m ? `<span class="mono">${esc(m)}</span>` : ''}${t ? `<span class="mono">${esc(t)}</span>` : ''}<span class="note">タスク完了ごとに diff.patch が自動更新されます</span></div>`
+    : '';
+  const files = parseDiff(state.diffText);
+  if (!files.length) {
+    box.innerHTML = `${runBanner}<p class="note">${isRun ? 'まだ差分が出力されていません。最初の変更・タスク完了後にここに diff が表示されます。' : '差分はありません (diff.patch が空または未生成です)。'}</p>`;
+    return;
+  }
+  const totalAdd = files.reduce((s, f) => s + f.add, 0), totalDel = files.reduce((s, f) => s + f.del, 0);
+  const stBadge = s => s === 'A' ? '<span class="badge b-done">A</span>' : s === 'D' ? '<span class="badge b-fail">D</span>' : s === 'R' ? '<span class="badge b-run">R</span>' : '<span class="badge b-skip">M</span>';
+  const labelOf = f => f.status === 'R' && f.oldPath !== f.newPath ? `${f.oldPath} → ${f.newPath}` : (f.status === 'D' ? f.oldPath : f.newPath);
+  const toc = files.map((f, i) => `<a class="diff-toc-item" href="#diff-f-${i}" onclick="event.preventDefault();document.getElementById('diff-f-${i}')?.scrollIntoView({behavior:'smooth',block:'start'})">${stBadge(f.status)}<span class="path">${esc(labelOf(f))}</span><span class="diff-stat-add">+${f.add}</span><span class="diff-stat-del">-${f.del}</span></a>`).join('');
+  const cards = files.map((f, i) => {
+    const pathKey = labelOf(f);
+    const openAttr = state.collapsedFiles.has(pathKey) ? '' : ' open';
+    const rows = f.binary
+      ? `<tr><td colspan="3" class="muted" style="padding:8px 12px">Binary file changed</td></tr>`
+      : f.hunks.map(h => `<tr class="d-hunk"><td class="ln">…</td><td class="ln">…</td><td class="code">${esc(h.header)}</td></tr>` + h.lines.map(l => `<tr class="d-${l.t}"><td class="ln">${l.o}</td><td class="ln">${l.n}</td><td class="code">${esc(l.c)}</td></tr>`).join('')).join('');
+    return `<details class="diff-file" id="diff-f-${i}" data-path="${esc(pathKey)}"${openAttr} ontoggle="this.open?window.__viewer.collapsedFiles.delete(this.dataset.path):window.__viewer.collapsedFiles.add(this.dataset.path)">
+      <summary>${stBadge(f.status)}<span>${esc(pathKey)}</span><span class="stats"><span class="diff-stat-add">+${f.add}</span><span class="diff-stat-del">-${f.del}</span></span></summary>
+      <div class="diff-wrap"><table class="diff-tbl">${rows}</table></div>
+    </details>`;
+  }).join('');
+  box.innerHTML = `
+    ${runBanner}
+    <div class="diff-bar">
+      ${badge(w && w.step === 'implement' ? `waiting ${waitLabel(w)}` : st || 'done')}
+      ${m ? `<span class="mono muted">${esc(m)}</span>` : ''}
+      ${t ? `<span class="mono muted">${esc(t)}</span>` : ''}
+      <span><b>${files.length}</b> files changed</span>
+      <span class="diff-stat-add">+${totalAdd}</span>
+      <span class="diff-stat-del">-${totalDel}</span>
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button class="diff-btn" onclick="toggleAllDiff(true)">すべて展開</button>
+        <button class="diff-btn" onclick="toggleAllDiff(false)">すべて折りたたむ</button>
+      </span>
+    </div>
+    <div class="diff-toc">${toc}</div>
+    ${cards}`;
+  box.scrollTop = sy;
+}
 function renderDash() {
   const ds = state.devState; if (!ds) { $('dash').innerHTML = '<p class="note">dev-state.json がありません</p>'; return; }
   const steps = ds.steps ?? {}, models = ds.models ?? {}, timings = ds.timings ?? {}, loops = ds.loops ?? {};
   const done = STEPS.filter(k => /^(completed|skipped)/.test(steps[k] ?? '')).length;
-  const running = STEPS.find(k => steps[k] && !/^(completed|skipped)/.test(steps[k]));
+  const running = runningStep();
   const w = waiting();
   const banner = w ? `<div class="banner"><b>⏸ ユーザーの回答待ち</b><span>${esc(waitLabel(w))}</span>${w.step ? `<span class="mono">${esc(w.step)}</span>` : ''}${waitSince(w) ? `<span class="muted">${esc(waitSince(w))} 経過</span>` : ''}${w.summary ? `<span class="note">${esc(w.summary)}</span>` : ''}<span class="note">ターミナルに戻って回答すると再開します</span></div>` : '';
   const cards = [
@@ -224,16 +375,16 @@ function reloadFrame() {
   f.onload = () => { try { f.contentWindow.scrollTo(0, y); } catch {} f.onload = null; state.seen[state.current] = true; render(); };
   f.contentWindow.location.reload();
 }
-window.addEventListener('hashchange', () => { const k = location.hash.slice(1); if (k && k !== state.current && state.hashes[k] != null) show(k); });
+window.addEventListener('hashchange', () => { const k = location.hash.slice(1); const p = PAGES.find(x => x.key === k); if (k && k !== state.current && isAvail(p)) show(k); });
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || !['j','k'].includes(e.key)) return;
-  const avail = PAGES.filter(p => state.hashes[p.key] != null); const i = avail.findIndex(p => p.key === state.current);
+  const avail = PAGES.filter(isAvail); const i = avail.findIndex(p => p.key === state.current);
   const n = avail[(i + (e.key === 'j' ? 1 : -1) + avail.length) % avail.length]; if (n) show(n.key);
 });
 (async () => {
   await poll();
   const want = location.hash.slice(1);
-  const first = PAGES.find(p => p.key === want && state.hashes[want] != null) || (state.devState ? PAGES[0] : [...PAGES].reverse().find(p => state.hashes[p.key] != null));
+  const first = PAGES.find(p => p.key === want && isAvail(p)) || (state.devState ? PAGES[0] : [...PAGES].reverse().find(isAvail));
   if (first) show(first.key);
   setInterval(() => { if ($('auto').checked) poll(); }, 3000);
 })();

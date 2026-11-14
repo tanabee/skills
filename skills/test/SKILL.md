@@ -54,7 +54,7 @@ chrome-devtools を使って動作確認テストを実行する。
 
 checklist.html に「UI 撮影台本」セクションが無い場合(UI 変更を伴わない issue)は **このステップ全体を自動スキップ** する。
 
-- Skill ツールで `/capture <issue> after <mode>` を実行し、台本に沿った実装後の UI を `screenshots/after/` に撮影する
+- Skill ツールで `/capture <issue> after <mode>` を実行し(Skill ツールが無い環境では `<本スキルのディレクトリ>/../capture/SKILL.md` の手順に従う)、台本に沿った実装後の UI を `screenshots/after/` に撮影する
 - `screenshots/before/`(`/dev` が実装前に `/capture <issue> before` で撮影)と `screenshots/after/` を撮影名で突き合わせ、`tmp/issues/<issue番号>/screenshots/compare.html` を生成する
 - セルフコンテインドな HTML(CSS/JS インライン)とし、画像は相対パスで参照する。撮影ペアごとにカード表示し、**横並び / スライダー** の表示切替を付ける
 - before のみ存在する画面は `REMOVED`、after のみ存在する画面は `NEW` バッジ付きで単独表示する(エラーにしない)

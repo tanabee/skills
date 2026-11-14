@@ -143,14 +143,11 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 
 #### 4-A. Antigravity (agy) レビュー（出力: `<output-dir>/review-agy.html`）
 
-- **実行環境が agy の場合**:
-  - `invoke_subagent` ツール（`TypeName: "self"`, `Role: "Antigravity Code Reviewer"`）で subagent を起動して共通プロンプト（`<output-file> = review-agy.html`）を渡す（統合を行う親のコンテキストと分離し、独立したレビュアーとして動かす）
-  - subagent が利用できない場合のみ、4-B・4-C のバックグラウンド実行を先に開始した上で、本スキルを実行している agy 自身が本会話内で同じ観点・同じ出力形式でレビューを実施し `<output-dir>/review-agy.html` に Write する（その際、4-B / 4-C の出力はまだ読まない）
-- **実行環境が agy 以外（Claude Code 等）の場合**:
-  - Bash ツールで `agy` CLI（`gemini-4-argon-high`）を非対話実行する。共通プロンプトを `<output-dir>/prompt-agy.txt` に書き出し、以下を実行する（`</dev/null` で stdin 待ちハングを防ぐ）:
-    ```bash
-    agy -p --mode auto --model gemini-4-argon-high --dangerously-skip-permissions "$(cat <output-dir 絶対パス>/prompt-agy.txt)" </dev/null
-    ```
+- 実行環境（Claude Code / agy 等）を問わず、親セッションのモデル（例: `/dev` が `gemini-4-hydrogen-low` で起動した統合親）に影響されず **`gemini-4-argon-high` の独立視点**を厳密に保証するため、`agy` CLI を非対話実行する。共通プロンプトを `<output-dir>/prompt-agy.txt` に書き出し、以下を実行する（`</dev/null` で stdin 待ちハングを防ぐ）:
+  ```bash
+  agy -p --mode auto --model gemini-4-argon-high --dangerously-skip-permissions "$(cat <output-dir 絶対パス>/prompt-agy.txt)" </dev/null
+  ```
+- `agy` CLI が実行できない場合のみ、実行環境が agy であれば `invoke_subagent`（`TypeName: "self"`, `Role: "Antigravity Code Reviewer"`）または本会話内で同じ観点・同じ出力形式でレビューを実施し `<output-dir>/review-agy.html` に Write する（その際、4-B / 4-C の出力はまだ読まない）
 
 #### 4-B. Claude (fable) レビュー（出力: `<output-dir>/review-claude.html`）
 
@@ -173,7 +170,7 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 
 - **Claude Code 環境**: 同一メッセージ内で `Agent` ツール（4-B）、`Bash` ツール（4-A の `agy -p`）、`Skill` ツール（4-C の `codex-review`）を同時に発行し、3 者の完了を待つ
 - **agy 環境**:
-  - 同一ターン内で `4-A`（`invoke_subagent`）、`4-B`（`run_command` で `claude -p ...`）、`4-C`（`run_command` で `run-codex-review.sh ...`）を並列に起動する
+  - 同一ターン内で `4-A`（`run_command` で `agy -p --model gemini-4-argon-high ...`）、`4-B`（`run_command` で `claude -p ...`）、`4-C`（`run_command` で `run-codex-review.sh ...`）を並列に起動する
   - 3 者すべての完了（`review-agy.html`・`review-claude.html`・`review-codex.html` の生成）を確認してからステップ 5 へ進む
 
 ### 5. 結果の統合（実行中の AI が実施）

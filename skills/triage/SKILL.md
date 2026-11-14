@@ -17,8 +17,8 @@ GitHub issue ( $ARGUMENTS ) の難易度 tier を判定し、`tmp/issues/<issue�
 
 | stage | 呼ばれる時点 | 判定材料 | 判定方法 |
 |---|---|---|---|
-| `initial` | /dev セットアップ直後 | issue 本文・ラベル + 軽量 grep | Jev(fallback: Claude) |
-| `confirm` | research 完了後 | research.md の「難易度シグナル」 | Jev(fallback: Claude) |
+| `initial` | /dev セットアップ直後 | issue 本文・ラベル + 軽量 grep | Jev(fallback: 実行中の LLM) |
+| `confirm` | research 完了後 | research.md の「難易度シグナル」 | Jev(fallback: 実行中の LLM) |
 | `promote` | plan 完了後 | plan.md の副作用 identifier 数・タスク数 | ルール(昇格のみ) |
 
 ## 基準ファイル
@@ -52,13 +52,13 @@ GitHub issue ( $ARGUMENTS ) の難易度 tier を判定し、`tmp/issues/<issue�
 4. **不確実帯のガード**: 一致した規則が参照する criterion のいずれかのスコアが `uncertain_band`(初期値 0.4〜0.6)に入っていたら、その一致は採用せず `default`(M)に倒し、`uncertain: true` を記録する。日本語 state での精度低下を安全側に吸収するための規則で、Noul には confidence が無いため 0.5 付近を「迷い」とみなす
 5. `source: "jev"`
 
-**fallback(Claude が代行)**
+**fallback(実行中の LLM が代行)**
 
 API キー無し / 非 2xx / タイムアウト / 応答の JSON 不正のとき:
 
 1. criteria.json の各 question の `instructions` と `criteria` を読み、**同じ state だけ**(`summary_en` を含む)を見て、各 criterion の「yes の確率」を 0〜1 で決める。推論を長引かせず、基準に照らして機械的に付ける
 2. 同じ `thresholds`(stage_overrides と不確実帯のガードを含む)で tier を決める
-3. `source: "claude-fallback"`、`fallback_reason` に理由(`no_api_key` / `http_<status>` / `timeout` / `bad_json`)を記録する
+3. `source: "llm-fallback"`(Claude Code では `"claude-fallback"` も同義)、`fallback_reason` に理由(`no_api_key` / `http_<status>` / `timeout` / `bad_json`)を記録する
 
 fallback も失敗した場合(state が集められない等)は tier を `M`、`source: "default"` とする。
 

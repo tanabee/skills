@@ -14,7 +14,9 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 - `<issue>`: issue 番号(`123`、`#123`)または URL。必須。空の場合はユーザーに issue 番号を質問する。URL が渡された場合は issue 番号を抽出し、以降のステップには正規化済みの issue 番号(例: `123`)を渡す
 - `[mode]`: 慎重度合い。`auto` / `normal`。省略可(開始時セットアップで質問する)
 - `[tier]`: 難易度。`S` / `M` / `L` / `XL` / `fixed:<model>[/<effort>]` / `full`。省略時は `/triage` が判定する。指定時は triage を一切呼ばない
-  - `fixed:<model>[/<effort>]`: tier 判定もスキップもせず、**全ステップを指定した model / effort で実行する**(例: `fixed:opus/high`、`fixed:opus`)。`full` は `fixed:fable/xhigh` の別名
+  - `fixed:<model>[/<effort>]`: tier 判定もスキップもせず、**全ステップを指定した model / effort で実行する**
+    - Claude Code 環境: 例 `fixed:opus/high`。`full` は `fixed:fable/xhigh` の別名
+    - Antigravity (`agy`) 環境: 例 `fixed:hydrogen/xhigh`、`fixed:carbon/high`(フル ID `fixed:gemini-4-carbon-high` 形式も可)。`full` は `fixed:carbon/high`(`gemini-4-carbon-high`)の別名
 
 ## ステップ定義表
 
@@ -42,7 +44,13 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 ### 実行形態表(tier × ステップ)
 
-値は `agent:<model>/<effort>`(Agent ツールで別コンテキストとして実行。`subagent_type` に **`dev-<model>-<effort>`** を指定し、**`model` 引数は渡さない**)/ `skip`。model はエージェント定義の frontmatter でフル ID に固定してある(`opus` = `claude-opus-5-5[1m]`、`fable` = `claude-fable-5-1`)。Agent ツールの `model` 引数はエイリアスしか受け付けず、`opus` が環境によって **Opus 5 に解決される**ため使わない。**ステップはすべて agent で動かし、inline(セッションモデル)で動くのは dev 本体だけ**(**Claude Code 以外から呼ばれた場合はこの表を使わず全ステップ inline**。後述「Claude Code 以外の実行環境」)。セッションの model / effort はステップの実行には影響しないが、**dev 本体はセッションモデルで動く**ので、セッションは Opus 5.5 以上を推奨する(※4)。
+実行環境ごとに **フル ID で model と effort を固定**し、各ステップを別コンテキストとして起動する(inline で動くのは dev 本体だけ)。
+
+- **Claude Code(`runtime: "claude-code"`、`subagent_type` を取る Agent ツールがある環境)**: 値は `agent:<model>/<effort>` / `skip`。Agent ツールの `subagent_type` に **`dev-<model>-<effort>`** を指定し、**`model` 引数は渡さない**(フロントマターで `opus` = `claude-opus-5-5[1m]`、`fable` = `claude-fable-5-1` に固定。`model: opus` エイリアスは環境により Opus 5 に解決されるため使わない)。セッションは **Opus 5.5 以上**を推奨(※4)
+- **Antigravity(`runtime: "agy"`、`invoke_subagent` / `ask_question` ツールがある環境)**: 値は `cli:<full-id>` / `skip`。`run_command` で **`agy -p --mode auto --output-format json --model <full-id> --dangerously-skip-permissions`** を非対話起動し、フル ID(`gemini-4-{carbon,argon,hydrogen}-{low,medium,high,xhigh}`)で厳密に固定する。`invoke_subagent`・`.agents/agents/*.md`・`run_workflow` の `model` は粗いエイリアス(`pro` / `flash` / `flash_lite` / `inherit`)しか受け付けないため使わない。セッションは **Gemini 4 Hydrogen(`gemini-4-hydrogen-medium` 等)** を推奨(※4)
+- **その他の実行環境(Codex CLI・Cursor 等)**: 表を使わず全ステップ inline(後述「Claude Code・agy 以外の実行環境」)
+
+#### Claude Code の実行形態表
 
 | ステップ | S | M | L | XL | fixed:\<model\>/\<effort\> |
 |---|---|---|---|---|---|
@@ -63,62 +71,95 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | notify-discord | agent:opus/low | agent:opus/low | agent:opus/low | agent:opus/low | agent:\<model\>/\<effort\> |
 | dev 本体(状態管理・DoD ゲート・config 学習・質問リレー) | inline(セッションモデル。**Opus 5.5 以上を推奨** ※4) | ← | ← | ← | inline |
 
-- triage-initial は tier が未確定の時点で実行するため、tier 引数が無い限り常に agent:opus/medium
+#### Antigravity (`agy`) の実行形態表
+
+| ステップ | S | M | L | XL | fixed:\<model\>[/\<effort\>] |
+|---|---|---|---|---|---|
+| triage-initial | cli:gemini-4-hydrogen-medium(tier 引数指定時は skip) | ← | ← | ← | skip |
+| research | skip | cli:gemini-4-hydrogen-high | cli:gemini-4-carbon-high | cli:gemini-4-carbon-high | cli:\<full-id\> |
+| └ ファンアウト(research 内) | — | gemini-4-hydrogen-low | gemini-4-hydrogen-medium | gemini-4-hydrogen-medium | \<full-id\> |
+| triage-confirm | skip | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | skip |
+| plan | cli:gemini-4-hydrogen-medium(lite) | cli:gemini-4-carbon-high | cli:gemini-4-carbon-high | cli:gemini-4-carbon-high | cli:\<full-id\> |
+| triage-promote | skip | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | skip |
+| review-plan | skip | cli:gemini-4-hydrogen-high ※1 | cli:gemini-4-argon-high ※5 | cli:gemini-4-carbon-high | cli:\<full-id\> |
+| capture-before | skip | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:\<full-id\> |
+| implement | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-xhigh | cli:gemini-4-hydrogen-xhigh | cli:gemini-4-carbon-high ※3 | cli:\<full-id\> |
+| create-pr-text | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-medium | cli:\<full-id\> |
+| test | cli:gemini-4-hydrogen-low ※2 | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | cli:\<full-id\> |
+| review(親: 収集・統合) | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:\<full-id\> |
+| └ 3 者レビュアー(review 内) | gemini-4-argon-high(正確性・副作用のみ) + Fable + Astra | gemini-4-argon-high + Fable + Astra | ← | ← | 既存維持 ※6 |
+| quiz | skip | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | cli:\<full-id\> |
+| notify-discord | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:\<full-id\> |
+| dev 本体(状態管理・DoD ゲート・config 学習・質問リレー) | inline(セッションモデル。**Gemini 4 Hydrogen (`gemini-4-hydrogen-medium` 等) を推奨** ※4) | ← | ← | ← | inline |
+
+- triage-initial は tier が未確定の時点で実行するため、tier 引数が無い限り常に `agent:opus/medium`(Claude Code)/ `cli:gemini-4-hydrogen-medium`(agy)
 - ※1 M の review-plan は、plan.md の「副作用 identifier」セクションが空 **かつ** `.agents/skills-config/review-plan/config.json` の `attentions` に plan の変更対象へ該当する項目が無い場合、dev が自動スキップしてよい(dev-state.json に理由を記録)
 - ※2 S の test は checklist の内容に従う(UI 変更が無ければ unit テスト項目だけになり、ブラウザ操作は発生しない)
-- ※3 **XL だけ implement を Fable に残す**。XL の定義が「実装方式の候補間でアーキテクチャが変わる / AC が未確定」であり、**plan が具体的になりえない**(実装時にしか決まらない判断が本質的に残る)ため。M / L は plan が「探索の代替」(正確なパス・シグネチャ・テストケース。`/plan` の「記述の原則」)まで書けている前提で Opus に落とす。**effort は tier に関わらず常に xhigh**: 低 effort はツール呼び出しを統合してターン数を減らすが、implement で減るのは**検証のターン**(テスト実行・変更後の再読・確認)であり、安くなった分だけ確認を省いた実装になるため。implement は Opus で動くので effort は Fable 枠に影響せず、下げる動機もない
-- **M / L で plan が曖昧だった場合の守りは予測ではなく feedback で行う**: implement が二回目の設計をして失敗したら、test 失敗ループの内側(implement 単独リトライ。**Fable 枠 0**)が拾い、実装では直せないと判断したら `status: needs-replan` で plan 巻き戻しに出る(後述)。内側リトライが安いので、plan 具体度を事前に採点して model を振り分ける機構は置かない(指標を増やすと較正対象が増え、判定を外したときの切り分けも難しくなる)
-- ※4 **dev 本体はセッションモデルで動く唯一の部分**。13 ステップの起動・要約の受領・state 更新・HTML オープン・DoD 判定・質問リレーで **80〜100 ターン**を回し、毎ターン文脈全体を再送する(SKILL.md だけで 12〜15k、終盤 30k 前後)。セッションが Fable だと **どのステップより多く Fable 枠を消費しうる**(prompt cache が枠にどう数えられるか不明なため、幅は 50k〜2M)。dev 本体の判断(DoD 証跡の照合・attentions 追記要否・チェックポイント報告)は小さく Opus で足りるので、**セッションは Opus 5.5 以上を推奨**(`/model` の選択肢から明示的に選ぶ。`opus` エイリアスは Opus 5 を指しうるので使わない)。表の Fable 配置はセッションモデルに依存せず、切り替えても各ステップの model は変わらない
-- 「└」の行はサブスキル内部で起動する Agent。research / review が tier 引数から model / effort を決める(subagent_type は同じ `dev-<model>-<effort>`)
-- `fixed:<model>/<effort>` は `dev-<model>-<effort>` で起動する。`<model>` が `opus` / `fable` 以外(定義が無い)か effort が省略された場合は、**Opus 5 に落ちる可能性があるエイリアス起動はせず**、ユーザーに「定義が無い」と報告して停止する(`auto` でも)
-- normal モードで質問が発生しうるステップ(research / plan / implement / test)は「質問リレー」で扱う(後述)。subagent 化のために auto に落とすことはしない
-- 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・コードレビュアー・XL の review-plan / implement)だけ Fable に残し、作業・診断寄りのステップは Opus に落とす**。Sonnet / Haiku は精度リスクを取ってまで使わず、安くしたければ Opus の effort を下げる。**Opus は 5.5 以上のみ**(Opus 5 以前は性能面で使わない。エージェント定義のフル ID 固定がその担保)
-- **implement を Fable から外す根拠**: implement は全ステップ中最大の消費源だが、plan が「探索の代替」になる具体度(正確なパス・シグネチャ・テストケース)まで書けていれば implement に残る判断は少なく、Opus で足りる。plan が具体的になりえない XL だけ Fable に残す(※3)
+- ※3 **XL だけ implement を Fable / Carbon に残す**。XL の定義が「実装方式の候補間でアーキテクチャが変わる / AC が未確定」であり、**plan が具体的になりえない**(実装時にしか決まらない判断が本質的に残る)ため。M / L は plan が「探索の代替」(正確なパス・シグネチャ・テストケース。`/plan` の「記述の原則」)まで書けている前提で Opus / Hydrogen に落とす。**M / L の effort は常に xhigh**(`dev-opus-xhigh` / `gemini-4-hydrogen-xhigh` — Hydrogen は Gemini 4 で唯一 `xhigh` を持つ): 低 effort はツール呼び出しを統合してターン数を減らすが、implement で減るのは**検証のターン**(テスト実行・変更後の再読・確認)であり、安くなった分だけ確認を省いた実装になるため
+- **M / L で plan が曖昧だった場合の守りは予測ではなく feedback で行う**: implement が二回目の設計をして失敗したら、test 失敗ループの内側(implement 単独リトライ。**Fable / Carbon 消費 0**)が拾い、実装では直せないと判断したら `status: needs-replan` で plan 巻き戻しに出る(後述)。内側リトライが安いので、plan 具体度を事前に採点して model を振り分ける機構は置かない(指標を増やすと較正対象が増え、判定を外したときの切り分けも難しくなる)
+- ※4 **dev 本体はセッションモデルで動く唯一の部分**。13 ステップの起動・要約の受領・state 更新・HTML オープン・DoD 判定・質問リレーで **80〜100 ターン**を回し、毎ターン文脈全体を再送する(SKILL.md だけで 12〜15k、終盤 30k 前後)。
+  - **Claude Code**: セッションが Fable だと **どのステップより多く Fable 枠を消費しうる**(幅 50k〜2M)。dev 本体の判断(DoD 証跡の照合・attentions 追記要否・チェックポイント報告)は Opus で足りるので、**セッションは Opus 5.5 以上を推奨**(`/model` の選択肢から明示的に選ぶ。`opus` エイリアスは Opus 5 を指しうるので使わない)
+  - **agy**: Carbon・Argon・Hydrogen・Orchestrator は**同一の Gemini クォータ枠**を共有するため、セッションが Carbon / Argon / Orchestrator だと 80〜100 ターンのオーケストレーションで共通枠を大きく削る。dev 本体は **Gemini 4 Hydrogen(`gemini-4-hydrogen-medium` 推奨)** で動かす。表の Carbon / Argon 配置はセッションモデルに依存せず、切り替えても各ステップの model は変わらない
+- ※5 **agy における Argon の役割(独立監査役への限定)**: Argon は API 単価・消費重みが Carbon と同帯である一方、コーディング・ターミナル指標は Hydrogen(`high` / `xhigh`)と同等以下のため、日常の実装や作業ステップには使わない。Argon の用途は **Carbon が作成した計画・実装を別の推論傾向で検証する独立監査** に絞り、L の `review-plan` と `/review` の agy レビュアー(`gemini-4-argon-high`)に配置して Carbon の自己追認を防ぐ
+- ※6 `/review` 内の 3 者並列レビュー(`gemini-4-argon-high` + `claude-fable-5-1` + `gpt-6-astra`)は agy 実行時もそのまま維持する
+- 「└」の行はサブスキル内部で起動する Agent / 子プロセス。research / review が tier 引数から model / effort を決める
+- `fixed:` の検証と展開:
+  - **Claude Code**: `dev-<model>-<effort>` で起動する。`<model>` が `opus` / `fable` 以外か effort が省略された場合は、**Opus 5 に落ちる可能性があるエイリアス起動はせず**、ユーザーに「定義が無い」と報告して停止する(`auto` でも)
+  - **agy**: `fixed:<model>/<effort>` は `gemini-4-<model>-<effort>` に展開する(`fixed:gemini-4-...` のフル ID 直接指定も可)。有効なフル ID は `gemini-4-carbon-{low,medium,high}`・`gemini-4-argon-{low,medium,high}`・`gemini-4-hydrogen-{low,medium,high,xhigh}` の **10 種のみ**。存在しない組み合わせ(例: `carbon/xhigh`、effort 省略)や粗いエイリアス(`pro` / `flash`)が指定された場合は fallback せず「定義が無い」と報告して停止する(`auto` でも)
+- normal モードで質問が発生しうるステップ(research / plan / implement / test)は「質問リレー」で扱う(後述)。subagent / 子プロセス化のために auto に落とすことはしない
+- 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・コードレビュアー・XL の review-plan / implement)だけ Fable / Carbon(および監査の Argon)に残し、作業・診断寄りのステップは Opus 5.5 / Hydrogen に落とす**。旧モデル・軽量モデル(Opus 5 以前 / Sonnet / Haiku / Gemini 3.8 Flash)は精度リスクを取ってまで使わず、安くしたければ Opus / Hydrogen の effort を下げる
+- **implement を Fable / Carbon から外す根拠**: implement は全ステップ中最大の消費源だが、plan が「探索の代替」になる具体度(正確なパス・シグネチャ・テストケース)まで書けていれば implement に残る判断は少なく、Opus 5.5 / Hydrogen(`xhigh`)で足りる。plan が具体的になりえない XL だけ Fable / Carbon に残す(※3)
 - **effort を下げて節約してよいステップ**: 長い文書を一度に書く quiz / create-pr-text / research の執筆部分。**implement と plan では effort を下げない**(前者は減るターンが検証のターンであり、後者は判断の質がそのまま後段にカスケードする)
 
-### エージェント定義の準備(model と effort を固定する)
+### 実行環境の準備(model と effort を固定する)
 
-Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか受け付けず、`opus` は環境によって Opus 5 に解決される。effort も引数では渡せない。どちらも subagent 定義(`~/.claude/agents/*.md`)の frontmatter でだけ固定できるため、本スキルの `assets/agents/` にある **10 ファイル** `dev-{opus,fable}-{low,medium,high,xhigh,max}.md`(`model` をフル ID で固定 + `effort` 固定)を使う。セットアップ時に次を行う:
+- **Claude Code(`runtime: "claude-code"`)**:
+  Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか受け付けず、`opus` は環境によって Opus 5 に解決される。effort も引数では渡せない。どちらも subagent 定義(`~/.claude/agents/*.md`)の frontmatter でだけ固定できるため、本スキルの `assets/agents/` にある **10 ファイル** `dev-{opus,fable}-{low,medium,high,xhigh,max}.md`(`model` をフル ID で固定 + `effort` 固定)を使う。セットアップ時に次を行う:
+  1. `~/.claude/agents/dev-opus-*.md` / `dev-fable-*.md` の 10 ファイルが存在し、`assets/agents/` と内容が一致するか `diff -q` で確認する。無い・違うものは `assets/agents/` からコピーする(`mkdir -p ~/.claude/agents`)。旧 `dev-effort-*.md` が残っていれば削除する(`model: inherit` のため、エイリアス経由で Opus 5 に落ちうる)。追加・更新は数秒で自動反映される(再起動不要)
+  2. ただし `~/.claude/agents/` を今回新規作成した場合(そのスコープで初のエージェント定義)は Claude Code の再起動まで定義が読まれない。その旨をユーザーに伝え、**再起動後の再実行を案内して停止する**
+  3. `dev-<model>-<effort>` を Agent ツールが受け付けない場合も同様に**停止して報告する**。`general-purpose` + `model` エイリアスへの fallback は行わない(Opus 5 に落ちる経路を残さないため)。dev-state.json に `agents_ready: false` と理由を記録する
+- **Antigravity(`runtime: "agy"`)**:
+  エージェント定義ファイルの配置は不要(`--model <full-id>` でフル ID を直接渡せるため)。セットアップ時に `command -v agy` で CLI が実行可能か確認し、可能なら `agents_ready: true` を記録する。実行不可の場合は粗いエイリアスしか持たない `invoke_subagent` へは fallback せず、`agents_ready: false` と理由を記録して**停止して報告する**
 
-1. `~/.claude/agents/dev-opus-*.md` / `dev-fable-*.md` の 10 ファイルが存在し、`assets/agents/` と内容が一致するか `diff -q` で確認する。無い・違うものは `assets/agents/` からコピーする(`mkdir -p ~/.claude/agents`)。旧 `dev-effort-*.md` が残っていれば削除する(`model: inherit` のため、エイリアス経由で Opus 5 に落ちうる)。追加・更新は数秒で自動反映される(再起動不要)
-2. ただし `~/.claude/agents/` を今回新規作成した場合(そのスコープで初のエージェント定義)は Claude Code の再起動まで定義が読まれない。その旨をユーザーに伝え、**再起動後の再実行を案内して停止する**
-3. `dev-<model>-<effort>` を Agent ツールが受け付けない場合も同様に**停止して報告する**。`general-purpose` + `model` エイリアスへの fallback は行わない(Opus 5 に落ちる経路を残さないため)。dev-state.json に `agents_ready: false` と理由を記録する
+### Claude Code・agy 以外の実行環境(全ステップ inline)
 
-上記 1〜3 は Claude Code で動いているときだけ行う(次節)。
+実行形態表と前節は Claude Code の Agent ツールまたは agy CLI 子プロセス起動を前提にしている。**Codex CLI・Cursor など、どちらでも動いていない環境から呼ばれた場合は、ユーザーに確認せず自然に「全ステップを自分(その AI のセッションモデル)で inline 実行する」を選ぶ**。
 
-### Claude Code 以外の実行環境(全ステップ inline)
-
-実行形態表と前節は Claude Code の Agent ツール(`subagent_type: dev-<model>-<effort>`)を前提にしている。**Codex CLI・Cursor・Gemini CLI など、この形の Agent ツールが無い環境から呼ばれた場合は、ユーザーに確認せず自然に「全ステップを自分(その AI のセッションモデル)で inline 実行する」を選ぶ**。model / effort の切り替えと Opus 5 回避は Claude Code 固有の事情で、他環境では成立しないため。
-
-- **判別**: 開始時に利用可能なツールを見て、`subagent_type` を取る Agent ツールが無ければ「Claude Code 以外」。dev-state.json に `runtime` を記録する(Claude Code なら `"claude-code"`、それ以外は環境名。例 `"codex"`)
+- **判別**: 開始時に利用可能なツールを見て、`subagent_type` を取る Agent ツールがあれば `"claude-code"`、`invoke_subagent` / `ask_question` があれば `"agy"`、それ以外は「その他」(例 `"codex"`)として dev-state.json の `runtime` に記録する
 - **triage は 3 つとも skip**(tier は主に model 選択に効くもので、inline では判定の価値が薄い)。tier 引数があればそのスキップ集合とループ上限を使い、無ければ **`M` として扱う**(`tier_source: "runtime-default"`。何も skip しない)
 - **各ステップ**: ステップ定義表の順に、サブスキルを本会話内で実行する(Skill ツール相当が無ければサブスキルの SKILL.md を読んでその指示に従う)。`models` は全ステップ `inline` と記録し、並列グループは表の順の直列で実行する。サブスキル内部のファンアウト(research / review)は各 SKILL.md の規定に従う(review は agy・Claude (`claude -p --model claude-fable-5-1 --effort high`)・Codex (`gpt-6-astra`) の 3 者を並列実行し、統合は実行中の AI 自身が行う)
 - **質問**: AskUserQuestion 相当の手段があればそれを、無ければ通常のメッセージで質問して回答を待つ。サブスキルも inline なので質問リレーは発生しない(サブスキルが直接質問する)。入力待ちの `waiting` 記録(後述)は同様に行う
 - **省くもの**: セッションモデルの確認(セットアップ質問 3)・エージェント定義の準備(`agents_ready: null`)・タスク管理ツールが無い環境での TaskCreate 系。成果物ビューアは `/open` 相当でブラウザを開けるなら開き、開けなければ各ステップ完了時に成果物パスを案内するだけにする(`viewer: false`)
-- それ以外(ステップ順・前提成果物・ループ・DoD・config 学習・チェックポイント)は Claude Code と同じ
+- それ以外(ステップ順・前提成果物・ループ・DoD・config 学習・チェックポイント)は Claude Code / agy と同じ
 
 ## 開始時セットアップ
 
-以下を **1 回の AskUserQuestion にまとめて** 質問する(mode が引数で指定済みならその質問は省く)。このセットアップ質問は mode の「質問しない」制約の適用対象外。
+以下を **1 回の AskUserQuestion(agy では `ask_question`)にまとめて** 質問する(mode が引数で指定済みならその質問は省く)。このセットアップ質問は mode の「質問しない」制約の適用対象外。
 
 1. **mode**: `auto` / `normal`(推奨: `normal`)
 2. **チェックポイント**(multiSelect): triage 以外のステップ 2〜12 のうち「完了後に停止して内容を確認したいステップ」を 0 個以上(デフォルト: なし)
-
-3. **セッションモデル**(セッションが Opus 5.5 以上でないときだけ表示): `このまま続行` / `中断して /model で切り替え後に再実行`(推奨: 中断して切り替え)。理由は実行形態表 ※4
+3. **セッションモデル**(推奨セッションモデルでないときだけ表示): `このまま続行` / `中断して /model で切り替え後に再実行`(推奨: 中断して切り替え)。理由は実行形態表 ※4
 
 スキップするステップは tier から決まるため、個別に質問しない。特定ステップを飛ばしたい場合は tier 引数で調整する(例: research を飛ばすなら `S`)。
 
 ### セッションモデルの確認
 
-セットアップ質問を出す前に、自身が動いているモデルを確認する(システムプロンプトのモデル名で判定)。
+セットアップ質問を出す前に、自身が動いているモデルを確認する(システムプロンプトや設定変更通知のモデル名で判定)。
 
-- **Opus 5.5 以上**: 何もしない(質問 3 は出さない)
-- **Fable**: 質問 3 を含める。理由は Fable 枠の消費(※4)
-- **Opus 5 以前 / Sonnet / Haiku**: 質問 3 を含める。理由は dev 本体の判断精度(DoD 判定・config 学習)
-- 「中断」が選ばれたら dev-state.json を書かずに終了し、`/model` で Opus 5.5 以上を選んで `/dev <同じ引数>` を再実行するよう案内する。「続行」なら `session_model` を dev-state.json に記録して進める(**auto でも質問 3 は出す**。セットアップ質問は mode の適用対象外)
-- `fixed:fable/...` / `full` 指定時も同じ(各ステップが Fable で動くことと、dev 本体が Fable で動くことは別の消費)
+- **Claude Code 環境**:
+  - **Opus 5.5 以上**: 何もしない(質問 3 は出さない)
+  - **Fable**: 質問 3 を含める。理由は Fable 枠の消費(※4)
+  - **Opus 5 以前 / Sonnet / Haiku**: 質問 3 を含める。理由は dev 本体の判断精度(DoD 判定・config 学習)
+  - 「中断」が選ばれたら dev-state.json を書かずに終了し、`/model` で Opus 5.5 以上を選んで `/dev <同じ引数>` を再実行するよう案内する
+- **Antigravity (`agy`) 環境**:
+  - **Gemini 4 Hydrogen(`gemini-4-hydrogen-*`)**: 何もしない(質問 3 は出さない)
+  - **Carbon / Argon / Orchestrator(および Claude Opus・Sonnet 等)**: 質問 3 を含める。理由は共通クォータ枠の大量消費(※4)
+  - **Gemini 3.8 Flash 等の旧・軽量モデル**: 質問 3 を含める。理由は dev 本体の判断精度(DoD 判定・config 学習)
+  - 「中断」が選ばれたら dev-state.json を書かずに終了し、`/model` で `Gemini 4 Hydrogen (Medium)` 等を選んで `/dev <同じ引数>` を再実行するよう案内する
+- 「続行」なら `session_model` を dev-state.json に記録して進める(**auto でも質問 3 は出す**。セットアップ質問は mode の適用対象外)
+- `fixed:` / `full` 指定時も同じ(各ステップが上位モデルで動くことと、dev 本体が上位モデルで動くことは別の消費)
 
-セットアップ質問の直後に「エージェント定義の準備」(前述)を行い、`agents_ready` を dev-state.json に記録する。
+セットアップ質問の直後に「実行環境の準備」(前述)を行い、`agents_ready` を dev-state.json に記録する。
 
 ## tier の確定と反映
 
@@ -157,12 +198,12 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 
 - `issue_url` はセットアップ時に `gh issue view <issue> --json url -q .url` で取得して記録する(ビューアがリンクにする。取得できなければ省略)
 - `skips` は tier から導出した結果(自動スキップ含む)の記録。人が選ぶ項目ではない
-- `fixed` は `fixed:` 指定時のみ `{ "model": "opus", "effort": "high" }`
-- `models` は各ステップを実際に起動した `<model>/<effort>` の記録(ループで再実行しても同じ model なら上書きでよい)。`timings` はステップの開始・完了時刻(ISO 8601)。どちらもビューアの dashboard が表示する。`agents` は質問リレーの再開に使う agentId(ステップ完了時に消してよい)
-- `runtime` は dev 本体が動いている実行環境(`claude-code` / `codex` 等。「Claude Code 以外の実行環境」の判別結果)
-- `agents_ready` は `dev-<model>-<effort>` 定義で起動できたか(false なら停止している。fallback は無い。Claude Code 以外では `null`)
+- `fixed` は `fixed:` 指定時のみ `{ "model": "opus", "effort": "high" }` (agy では `{ "model": "carbon", "effort": "high" }` のようにモデル名と effort に分けて記録する — ビューアが `<model>/<effort>` で表示するため)
+- `models` は各ステップを実際に起動した `<model>/<effort>` またはフル ID(`gemini-4-carbon-high` 等)の記録(ループで再実行しても同じ model なら上書きでよい)。`timings` はステップの開始・完了時刻(ISO 8601)。どちらもビューアの dashboard が表示する。`agents` は質問リレーの再開に使う識別子(Claude Code は `agentId`、agy は `--output-format json` で返る `conversation_id`。ステップ完了時に消してよい)
+- `runtime` は dev 本体が動いている実行環境(`claude-code` / `agy` / `codex` 等)
+- `agents_ready` は指定環境でのフル ID 起動準備が整ったか(false なら停止している。fallback は無い。Claude Code・agy 以外では `null`)
 - `waiting` はユーザーの回答待ちで停止している間だけ非 null(後述「入力待ちの記録」)。ビューアが実行中と区別して表示する
-- `session_model` は dev 本体が動いているモデル。Fable のまま続行した run を後から集計で見分けるために記録する
+- `session_model` は dev 本体が動いているモデル。Fable や Carbon のまま続行した run を後から集計で見分けるために記録する
 - `loops.test_inner` は外側に出るたび 0 にリセットする。`test_failures` は内側の各ラウンドで失敗した checklist 項目名の配列(早期エスカレーション判定に使う。外側に出たらクリアする)
 - `/dev` 開始時に同 issue の dev-state.json が既に存在する場合は内容を読み、未完了の最初のステップからの再開をユーザーに提案する(auto では自動で再開)。tier は記録済みの値を使う
 
@@ -171,7 +212,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 ステップごとに html を別タブで開くと、ループの再生成も含めてタブが増え続ける。代わりに本スキルの `assets/viewer.html`(左に成果物一覧、右に iframe)を **issue ごとに 1 タブだけ** 開き、以降はそのタブを使い回す。
 
 - **URL**: `file://<本スキルの assets/viewer.html の絶対パス>?dir=file://<成果物ディレクトリの絶対パス>/#<page>`(`dir` は末尾 `/` 付き。viewer.html は成果物ディレクトリにコピーしない)
-- **開くタイミング**: dev-state.json を書き出した直後(セットアップ完了時)に `/open <URL>#dashboard` で 1 回開く。以降は各ステップ完了後に `#<page>` 付きで `/open` を呼ぶだけでよい(implement は開始時にも `#implement` で切り替える)。`/open` は同 URL のタブがあればリロード、ハッシュ違いならページ内遷移にするので(open スキルの「開き方」)、タブは増えない
+- **開くタイミング**: dev-state.json を書き出した直後(セットアップ完了時)に `/open <URL>#dashboard`(Skill ツールが無い agy 環境では `<本スキルのディレクトリ>/../open/SKILL.md` の手順)で 1 回開く。以降は各ステップ完了後に `#<page>` 付きで同様に呼ぶだけでよい(implement は開始時にも `#implement` で切り替える)。`/open` は同 URL のタブがあればリロード、ハッシュ違いならページ内遷移にするので(open スキルの「開き方」)、タブは増えない
 - **ビューアの挙動**: 先頭の `dashboard` は dev-state.json を描画したページ(進捗バー・ステップ表・ループ・DoD)、`implement` は `diff.patch` を描画した差分ビュー(ファイル一覧・unified/split 切替・シンタックスハイライト・Viewed チェック付き diff)。3 秒ごとに `dev-state.json` と各成果物を fetch し、未生成はグレー、更新ありは黄、進行中ステップ(`steps` が completed / skipped 以外)は紫のハイライト＋上部バーの実行中ピル＋タブタイトル `▶ <step>`、**ユーザーの回答待ち(`waiting` が非 null)はオレンジで表示し、タブタイトルに ⏸ を付け、全ページ共通の上部バーとダッシュボード先頭に待ちの内容(種別・ステップ・経過時間・要約)を出す**(実行中と見分けるため)。表示中ページが更新されるとスクロール位置を保ってリロードする。open スキルの config に `--allow-file-access-from-files` が必要(open スキルが自動で追記する)
 - `/open` が `"browser": "default"` の場合も同じ URL を開くが、既定ブラウザでは `file://` の fetch が効かないため一覧がグレーのままになる。その場合は従来どおり個別 html を `/open` で開く(dev-state.json に `viewer: false` を記録)
 
@@ -189,7 +230,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 
 ## 作業ブランチの準備
 
-セットアップ完了後、TaskCreate より前に実行する。実装コミットがベースブランチや無関係なブランチに混ざるのを防ぐガード。
+セットアップ完了後、タスク登録・ステップ実行より前に実行する。実装コミットがベースブランチや無関係なブランチに混ざるのを防ぐガード。
 
 1. **ベースブランチの確定**: `tmp/config.json` の `base_branch` を読む。無ければ `git remote show origin` の HEAD branch から検出し、`tmp/config.json` に保存する(以降 `<base>`)
 2. `git rev-parse --abbrev-ref HEAD` で現在のブランチ名を取得する。期待するブランチ名は **`issue-<issue番号>`**
@@ -203,7 +244,7 @@ Agent ツールの `model` 引数はエイリアス(`opus` / `fable` 等)しか�
 
 ## タスク管理
 
-tier 確定後(tier 引数指定時はセットアップ直後、それ以外は triage-initial 直後)、ステップ定義表の各ステップ(実行形態表で skip のものを除く)を TaskCreate で一括登録する。triage-confirm で tier が変わりスキップ集合が変わった場合はタスクを追加・削除して同期する。
+TaskCreate 系ツールがある環境(Claude Code)では、tier 確定後(tier 引数指定時はセットアップ直後、それ以外は triage-initial 直後)、ステップ定義表の各ステップ(実行形態表で skip のものを除く)を TaskCreate で一括登録する。triage-confirm で tier が変わりスキップ集合が変わった場合はタスクを追加・削除して同期する。TaskCreate 系ツールが無い環境(agy 等)では TaskCreate は省き、dev-state.json の `steps` 更新のみで進捗を管理する。
 
 - 各ステップの開始直前に `in_progress`、正常完了で即座に `completed` に更新する(バッチ更新しない)
 - 同時に `in_progress` にできるのは原則 1 タスク。**例外: 同じ並列グループのステップは同時に `in_progress` にしてよい**
@@ -218,8 +259,8 @@ tier 確定後(tier 引数指定時はセットアップ直後、それ以外は
 2. **前提成果物の確認**: 表の「前提成果物」が存在するか確認する。存在しない場合(スキップや前回実行の欠如による):
    - サブスキル側に fallback があればそれに委ねる
    - fallback が無い場合 — `auto`: 警告を dev-state.json に記録し、続行可能なら続行、不可能ならそのステップもスキップ扱いにする。`normal`: ユーザーに続行可否を確認する
-3. **実行**: 実行形態表に従って Agent ツールで起動する(`subagent_type: dev-<model>-<effort>`。後述「agent ステップの依頼形式」)。`implement` は起動直前(`steps.implement` を `in_progress` に更新した直後)にも `/open <ビューア URL>#implement` を呼んで `implement` タブに切り替える。normal で `status: needs-input` が返ったら「質問リレー」で回答を戻して再開する
-4. **ビューアの切り替え**: 個別の `.html` は開かない。ステップ完了後に Skill ツールで `/open <ビューア URL>#<page>` を呼び、「成果物ビューア」の該当ページに切り替える(page はステップ → page 表のとおり。ループでの再生成・更新時も同様。ビューアは変更を自動検知して表示中ページをリロードするので、切り替え以外の操作は不要)
+3. **実行**: 実行形態表に従って起動する(Claude Code は Agent ツール `subagent_type: dev-<model>-<effort>`、agy は `agy -p --model <full-id>` 子プロセス。後述「ステップの依頼形式」)。`implement` は起動直前(`steps.implement` を `in_progress` に更新した直後)にも `/open <ビューア URL>#implement` を呼んで `implement` タブに切り替える。normal で `status: needs-input` が返ったら「質問リレー」で回答を戻して再開する
+4. **ビューアの切り替え**: 個別の `.html` は開かない。ステップ完了後に `/open <ビューア URL>#<page>`(Claude Code は Skill ツール、agy は `../open/SKILL.md` の手順)を呼び、「成果物ビューア」の該当ページに切り替える(page はステップ → page 表のとおり。ループでの再生成・更新時も同様。ビューアは変更を自動検知して表示中ページをリロードするので、切り替え以外の操作は不要)
 5. **チェックポイント判定**: 指定されていれば停止する(「チェックポイント停止の挙動」参照)
 
 ### mode の挙動
@@ -230,17 +271,26 @@ tier 確定後(tier 引数指定時はセットアップ直後、それ以外は
 | `normal` | plan の方針選択・config 追記の承認・tier 確定時の確認のみ質問する。それ以外は中断せず進める |
 
 - mode はサブスキルの呼び出し引数として明示的に渡す(例: `/plan 123 normal`)。normal でも auto に落とさない
-- subagent には AskUserQuestion が無い(対話セッションでは subagent は常に background で動く)。normal での質問は「質問リレー」で dev が代行する。並列グループ(A / B)のうち質問が発生しうるのは test だけで、それもリレーで扱える
+- subagent / 非対話子プロセスには対話質問ツールが無い。normal での質問は「質問リレー」で dev が代行する。並列グループ(A / B)のうち質問が発生しうるのは test だけで、それもリレーで扱える
 - チェックポイント停止・ループ上限到達時の報告は mode に関わらず必ず行う
 
-### agent ステップの依頼形式
+### ステップの依頼形式(Claude Code Agent / agy 子プロセス)
 
-Agent ツール(`subagent_type: dev-<model>-<effort>`。実行形態表の値。`model` 引数は渡さない)で起動し、プロンプトに以下を含める:
+- **Claude Code(`runtime: "claude-code"`)**: Agent ツール(`subagent_type: dev-<model>-<effort>`。実行形態表の値。`model` 引数は渡さない)で起動する。起動時に返る `agentId` を dev-state.json の `agents.<step>` に記録する
+- **Antigravity(`runtime: "agy"`)**: 依頼プロンプトを `tmp/issues/<issue番号>/prompt-<step>.txt` に書き出し、`run_command` で以下を実行する(`</dev/null` で stdin 待ちハングを防ぐ):
+  ```bash
+  agy -p --mode auto --output-format json --model <full-id> --dangerously-skip-permissions "$(cat <output-dir絶対パス>/prompt-<step>.txt)" </dev/null
+  ```
+  完了時に stdout の JSON から `conversation_id` と `response` を取り、`conversation_id` を dev-state.json の `agents.<step>` に記録し、`response` から末尾サマリを読む
 
-- Skill ツールで対象スキルを実行すること(例: `Skill ツールで review-plan を args「123」で実行してください`)。呼び出し引数はステップ定義表のとおり(mode を取るスキルには dev の mode をそのまま渡す)
+どちらの環境でも、プロンプトに以下を含める:
+
+- 対象スキルの実行指示(呼び出し引数はステップ定義表のとおり。mode を取るスキルには dev の mode をそのまま渡す):
+  - Claude Code: Skill ツールで対象スキルを実行すること(例: `Skill ツールで review-plan を args「123」で実行してください`)
+  - agy: `<本スキルのディレクトリ>/../<対象スキル>/SKILL.md` を読んで `$ARGUMENTS` を `<呼び出し引数>` として実行すること(サブスキル内部から別スキルを呼ぶ場合も同様に隣ディレクトリの `SKILL.md` を読むこと。成果物をブラウザで開く操作は呼び出し元の dev が行うため行わないこと)
 - リポジトリルートと成果物ディレクトリ(`tmp/issues/<issue番号>/`)の**絶対パス**
 - mode が `auto` のとき: 「ユーザーへの質問はできない。判断に迷う場合は保守的に倒し、その旨を成果物に明記する」という制約
-- mode が `normal` のとき: 「AskUserQuestion は使えない。質問が必要になったら `tmp/issues/<issue番号>/questions.json` に書き、最終メッセージを `status: needs-input` として一旦終了せよ。回答は再開時のメッセージで渡す」という質問リレーの指示(フォーマットは後述)
+- mode が `normal` のとき: 「AskUserQuestion / ask_question は使えない。質問が必要になったら `tmp/issues/<issue番号>/questions.json` に書き、最終メッセージを `status: needs-input` として一旦終了せよ。回答は再開時のメッセージで渡す」という質問リレーの指示(フォーマットは後述)
 - 「検索は Grep ツールまたは `git grep` / `rg` を使い、Bash の `grep -r` / `find <dir>` は使わない(gitignore された `.secret.local` 等の deny ルール対象ファイルを走査して承認待ちになる)」という制約
 - 最終メッセージの 1 行目は `status: done` または `status: needs-input`。続けて返すサマリの形式:
   - triage: tier / source / 決め手(3 行)
@@ -253,14 +303,19 @@ Agent ツール(`subagent_type: dev-<model>-<effort>`。実行形態表の値。
   - test: 失敗項目の有無と件数、compare.html の有無
   - capture / create-pr-text / quiz / notify-discord: 生成した成果物のパスと要点(capture はスキップ理由があればそれ)
 
-起動時に返る agentId を dev-state.json の `agents` に記録する(質問リレーの再開に使う)。
+### 質問リレー(normal モードの subagent / 子プロセスからの質問)
 
-### 質問リレー(normal モードの subagent からの質問)
-
-1. `status: needs-input` が返ったら `tmp/issues/<issue番号>/questions.json` を読み、dev-state.json の `waiting`(後述)を書いてから、その内容を**そのまま** AskUserQuestion でユーザーに提示する(質問文・選択肢・multiSelect を変えない。自由入力も受け付ける)
-2. 回答を questions.json の `answers` に書き込み、SendMessage で同じ subagent(`agents` に記録した agentId)に「questions.json に回答を書いた。続きから進めよ」と送って再開する。再開した subagent は文脈を保持したまま続きから進む
+1. `status: needs-input` が返ったら `tmp/issues/<issue番号>/questions.json` を読み、dev-state.json の `waiting`(後述)を書いてから、ユーザーに提示する:
+   - Claude Code: その内容を**そのまま** AskUserQuestion で提示する(質問文・選択肢・multiSelect を変えない。自由入力も受け付ける)
+   - agy: `ask_question` ツールのスキーマ(`question`、`is_multi_select: multiSelect`、文字列配列 `options`: `description` があれば `"<label> — <description>"`、無ければ `"<label>"`)に変換して提示する(質問文や選択肢の意味は変えない)
+2. 回答を questions.json の `answers` に書き込み、文脈を保持したまま同じセッションを再開する:
+   - Claude Code: SendMessage で同じ subagent(`agents` に記録した `agentId`)に「questions.json に回答を書いた。続きから進めよ」と送る
+   - agy: `agents` に記録した `conversation_id` を `--conversation` に渡して再開する:
+     ```bash
+     agy -p --mode auto --output-format json --model <full-id> --conversation "<conversation_id>" --dangerously-skip-permissions "tmp/issues/<issue番号>/questions.json に回答を書いた。続きから進めよ" </dev/null
+     ```
 3. `status: done` が返るまで 1〜2 を繰り返す(research は 1 テーマずつ質問するので複数回になりうる)
-4. 再開できない(subagent が失われた等)場合は、questions.json の回答を含めて同じステップを新規起動する(サブスキルは既存成果物と回答を読んで再開する)
+4. 再開できない(subagent や会話履歴が失われた等)場合は、questions.json の回答を含めて同じステップを新規起動する(サブスキルは既存成果物と回答を読んで再開する)
 
 questions.json のフォーマット(AskUserQuestion と同じ構造):
 
@@ -288,7 +343,7 @@ questions.json のフォーマット(AskUserQuestion と同じ構造):
 
 | kind | 発生箇所 |
 |---|---|
-| `question` | 質問リレー(subagent からの `needs-input`) |
+| `question` | 質問リレー(subagent / 子プロセスからの `needs-input`) |
 | `checkpoint` | チェックポイント停止 |
 | `tier-confirm` | tier 確定時の確認(normal / `source: default`) |
 | `prerequisite` | 前提成果物欠如時の続行確認(normal) |
@@ -297,12 +352,12 @@ questions.json のフォーマット(AskUserQuestion と同じ構造):
 | `resume` | 既存 dev-state.json からの再開提案 |
 
 - `step` は待ちの原因になったステップ(dev 自身の質問なら直前に完了した・または次に実行するステップ)。`since` は ISO 8601。`summary` は 1 行(質問リレーなら questions.json の先頭 `header` と質問数)
-- セットアップ質問は dev-state.json 書き出し前なので対象外。Claude Code 以外の inline 実行でサブスキルが直接質問する場合も、dev が把握できる範囲(ステップ開始前・完了後の自分の質問)で同様に書く
+- セットアップ質問は dev-state.json 書き出し前なので対象外。その他の環境での inline 実行でサブスキルが直接質問する場合も、dev が把握できる範囲(ステップ開始前・完了後の自分の質問)で同様に書く
 
 ### 並列グループの実行
 
-- **グループ A(create-pr-text ∥ test)**: 2 つの subagent を**同一メッセージで並列起動**する。両方の完了(test は `status: done`)を確認してから review へ進む
-- **グループ B(quiz ∥ notify-discord)**: 同様に同一メッセージで並列起動し、両方の完了を確認してから `/dev` を終了する
+- **グループ A(create-pr-text ∥ test)**: 2 つの subagent(agy では 2 つの `run_command`)を**同一ターンで並列起動**する。両方の完了(test は `status: done`)を確認してから review へ進む
+- **グループ B(quiz ∥ notify-discord)**: 同様に同一ターンで並列起動し、両方の完了を確認してから `/dev` を終了する
 - グループ内のステップに**チェックポイントが指定されている場合、そのグループは表の順の直列実行に落とす**
 - グループ内の片方がスキップされた場合、残りを単独で通常実行する
 
@@ -312,7 +367,7 @@ dev が実施内容のサマリを組み立てて `/notify-discord <サマリ>` 
 
 ## ループ(4 種)と上限
 
-test 失敗ループは **内側(implement 単独リトライ)と外側(plan 巻き戻し)の二段** に分かれる。内側は implement と test だけを回すので **plan(Fable)を消費しない**。外側に出ると plan の再実行が発生するため、**内側を使い切ってから外側に出る**。
+test 失敗ループは **内側(implement 単独リトライ)と外側(plan 巻き戻し)の二段** に分かれる。内側は implement と test だけを回すので **plan(Fable / Carbon)を消費しない**。外側に出ると plan の再実行が発生するため、**内側を使い切ってから外側に出る**。
 
 | ループ | 発動条件 | 戻り先 | 上限(S) | 上限(M 以上・fixed) |
 |---|---|---|---|---|
@@ -323,14 +378,14 @@ test 失敗ループは **内側(implement 単独リトライ)と外側(plan 巻
 
 - **早期エスカレーション条件**: 内側で **同一の checklist 項目が 2 回連続して失敗**したら、内側上限を待たずに外側へ出る。同じ箇所で 2 回転ぶのは実装の揺らぎではなく計画の欠陥のサインで、3 回目を回しても同じ箇所で転ぶため(待ち時間の純損失)。失敗項目が毎回違う場合は内側上限まで回す。判定には `checklist.html` の失敗項目を使い、各ラウンドの失敗項目を dev-state.json の `test_failures` に記録する
 - 外側に出るたび内側カウントを 0 にリセットする。**最悪ケースの test 実行回数 = 内側 3 × (外側 1 + 1) = 6 回**
-- **外側を 1 回に絞る理由**: 内側と外側は目的が違う。内側は**実装の欠陥**を直し、ラウンドごとに失敗項目が変わるなら情報が増えている。外側は**計画の欠陥**を直すもので、1 度書き直してもなお失敗するなら「必要な情報がパイプラインに入っていない」(AC が曖昧 / research が足りない / 暗黙の前提が違う)という証拠であり、同じ入力で同じエージェントがもう一度書き直しても出てこない。**そこが人に渡すべき点**。外側 1 周あたり plan の Fable 110k を払うことも考えると、2 周目の期待値は低い
+- **外側を 1 回に絞る理由**: 内側と外側は目的が違う。内側は**実装の欠陥**を直し、ラウンドごとに失敗項目が変わるなら情報が増えている。外側は**計画の欠陥**を直すもので、1 度書き直してもなお失敗するなら「必要な情報がパイプラインに入っていない」(AC が曖昧 / research が足りない / 暗黙の前提が違う)という証拠であり、同じ入力で同じエージェントがもう一度書き直しても出てこない。**そこが人に渡すべき点**。外側 1 周あたり plan の Fable / Carbon を払うことも考えると、2 周目の期待値は低い
 - 各ループは**独立にカウント**し、dev-state.json の `loops` に記録する
 - **S で上限に達した場合は tier 判定の誤りとみなし、tier を M に昇格して(`tier_source: "loop-promote"`)残りのステップを M として続行する**(research は飛ばしたまま。review-plan と quiz は以降有効になる)。M 以上で上限に達しても解消しない場合はループを終了し、状況をユーザーに報告して判断を仰ぐ(**auto でもここは停止する**)
 - **内側リトライでの implement 再実行は `/implement <issue> <mode> fix` で起動し、失敗した checklist 項目と `/test` の失敗内容をプロンプトに渡す**(何を直すべきか分かる状態で起動する)。計画自体の変更はさせない
 - **implement が `status: needs-replan` を返したら、内側カウントに関わらず即座に外側へエスカレーションする**(「計画を直さないと実装では直せない」という implement 側からの申告)。返ってきた「plan の何を直す必要があるか」を `/plan` の再実行プロンプトに渡す
 - review 差し戻しループの implement も同様に `fix` で起動し、must 指摘をプロンプトに渡す
 - 再計画・修正時は `tmp/issues/<issue番号>/` の既存成果物を新規作成し直すのではなく、失敗・指摘内容を反映して**更新**する
-- **review ループで実装が変わった場合は pr.md も更新する**(create-pr-text を agent で再実行)
+- **review ループで実装が変わった場合は pr.md も更新する**(create-pr-text を実行形態表どおり再実行)
 - ループ再突入時の確認頻度は mode に従う(auto: 確認なし、normal: 再計画時の方針選択のみ)
 
 ## 完了の定義(DoD)ゲート
@@ -344,7 +399,7 @@ review ループを抜けたら、グループ B に進む前に plan.md の「�
 
 ## チェックポイント停止の挙動
 
-指定されたステップの完了後、進行を一時停止し、直前ステップの成果物パスと次に実行されるステップを提示した上で AskUserQuestion で選択してもらう:
+指定されたステップの完了後、進行を一時停止し、直前ステップの成果物パスと次に実行されるステップを提示した上で AskUserQuestion(agy では `ask_question`)で選択してもらう:
 
 - **続行**: 次のステップに進む
 - **中断**: `/dev` を終了する(残タスクは削除し、dev-state.json に記録)
@@ -385,6 +440,6 @@ review ループを抜けたら、グループ B に進む前に plan.md の「�
 
 - mode に応じた質問頻度を守る。セットアップ質問(セッションモデルの確認を含む)・tier 確定時の確認(normal)・チェックポイント停止・ループ上限到達時の報告・DoD 未充足かつループ上限到達時の報告は mode の適用対象外(必ず行う)
 - 成果物 html を増やす場合は `assets/viewer.html` の `PAGES` と「成果物ビューア」の表に 1 行ずつ足す
-- ステップの増減・並列グループ・実行形態の変更はステップ定義表と実行形態表の修正だけで完結させる。**サブスキルの SKILL.md に model / effort を書かない**(frontmatter の model 上書きは静的で、そのターンの残り全体に残るため fixed と両立しない)。model と effort の器は `assets/agents/dev-{opus,fable}-*.md` の 10 定義だけで、値の割り当ては実行形態表が持つ。**Opus 5 に解決されうるエイリアス起動(`model: opus`)はどこにも書かない**
+- ステップの増減・並列グループ・実行形態の変更はステップ定義表と実行形態表の修正だけで完結させる。**サブスキルの SKILL.md に model / effort を書かない**(frontmatter の model 上書きは静的で、そのターンの残り全体に残るため fixed と両立しない)。Claude Code では `assets/agents/dev-{opus,fable}-*.md` の 10 定義、agy では `agy -p --model <full-id>` が model と effort の器になり、値の割り当ては実行形態表が持つ。**粗いエイリアス起動(Claude Code の `model: opus`、agy の `invoke_subagent` `pro` / `flash`)はどこにも書かない**
 - サブスキル間の成果物規約(必須セクション・フォーマット)は各サブスキルの SKILL.md が定義する。dev は **成果物パスの受け渡し・実行順序・実行形態(model)・HTML 成果物のオープン・ループ・状態管理** にのみ責務を持つ
-- subagent の結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行(Skill ツールで本会話内)に切り替える(セッションの model / effort で動くことになるが、止まるよりよい。dev-state.json の `models` に `inline` と記録する)。Claude Code 以外の実行環境では最初から全ステップ inline(「Claude Code 以外の実行環境」)
+- subagent / 子プロセスの結果が返らない・失敗した場合は 1 回だけ再実行し、それでも失敗したら inline 実行(本会話内で対象スキルの SKILL.md に従って実行)に切り替える(セッションの model / effort で動くことになるが、止まるよりよい。dev-state.json の `models` に `inline` と記録する)。Claude Code・agy 以外の実行環境では最初から全ステップ inline(「Claude Code・agy 以外の実行環境」)

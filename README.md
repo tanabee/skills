@@ -78,11 +78,13 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | --- | --- | --- |
 | `S` | 1〜2 ファイルの定型・局所変更 | research / review-plan / capture / quiz をスキップ。plan は `lite` |
 | `M` | 既存パターンに沿った 1 機能 | 全ステップ。副作用 identifier が無ければ review-plan を自動スキップ |
-| `L` / `XL` | 横断・副作用あり / 設計判断・要件曖昧 | 全ステップ。research / plan / implement を Fable xhigh に（XL の plan は max、レビュアーは Fable high） |
-| `fixed:<model>[/<effort>]` | 判定なし・スキップなし | 全ステップを指定した model / effort で実行。`full` = `fixed:fable/xhigh` |
+| `L` / `XL` | 横断・副作用あり / 設計判断・要件曖昧 | 全ステップ。上流判断ステップを Fable（Claude Code）/ Carbon（agy）に引き上げ（L の review-plan は agy では Argon 独立監査） |
+| `fixed:<model>[/<effort>]` | 判定なし・スキップなし | 全ステップを指定した model / effort で実行。`full` は Claude Code では `fixed:fable/xhigh`、agy では `fixed:carbon/high` |
 
-- **モデルの使い分け**: 全ステップを subagent で実行し、tier × ステップごとに model と effort を `/dev` の実行形態表で決めます。判断が後段にカスケードするステップ（research 本体・plan・コードレビュアー・XL の review-plan / implement）だけ Fable、それ以外（capture / test / create-pr-text / review 統合 / quiz / notify-discord など）は Opus に落として Fable の消費を抑えます。S でもコードレビューの Claude レビュアーは Fable で実行します
-- **effort の固定**: Agent ツールは effort を渡せないため、`/dev` が `skills/dev/assets/agents/dev-effort-{low,medium,high,xhigh,max}.md` を `~/.claude/agents/` に配置し（初回セットアップ時に自動コピー）、`subagent_type: dev-effort-<effort>` + `model` 引数でステップを起動します。セッションの `/model` `/effort` はオーケストレーション（dev 本体）にしか影響しません
+- **モデルの使い分け**: 全ステップを別コンテキスト（Claude Code は subagent、agy は `agy -p` 子プロセス）で実行し、tier × ステップごとにフル ID で model と effort を固定します
+  - **Claude Code**: 判断が後段にカスケードするステップ（research 本体・plan・コードレビュアー・XL の review-plan / implement）だけ **Fable**、それ以外（M/L の implement・test・作業系・dev 本体セッション）は **Opus 5.5** に落として Fable 枠の消費を抑えます
+  - **Antigravity (`agy`)**: 共通 Gemini クォータ枠の中で、上流判断（plan・L/XL の research・XL の implement）に **Carbon**、主力実装・検証・dev 本体セッションに **Hydrogen**（M/L の implement は `xhigh`）、独立監査（L の review-plan・review の agy レビュアー）に **Argon** を割り当てます
+- **フル ID と effort の固定**: 粗いエイリアス（Claude Code の `model: opus`、agy の `invoke_subagent` `pro`/`flash`）は使いません。Claude Code では `skills/dev/assets/agents/dev-{opus,fable}-{low,medium,high,xhigh,max}.md` を `~/.claude/agents/` に自動配置して `subagent_type` で起動し、agy では `agy -p --model gemini-4-<model>-<effort>` でフル ID を直接指定します。セッションの `/model` はオーケストレーション（dev 本体）にのみ影響します（Claude Code は Opus 5.5 以上、agy は Hydrogen Medium を推奨）
 - **normal モードの質問**: subagent は直接ユーザーに質問できないため、サブスキルは質問を `questions.json` に書いて一旦停止し、`/dev` が AskUserQuestion で代行して回答を戻し、同じ subagent を文脈を保ったまま再開します（質問リレー）
 - **作業開始前に `issue-<issue番号>` ブランチに切り替えます**（無ければベースブランチから自動作成。未コミットの変更がある場合は中断してユーザーに対処を促します）
 - `/review-plan` で**修正必須**が出た場合は `/plan` → `/review-plan` のサブループを最大 3 回まで回します

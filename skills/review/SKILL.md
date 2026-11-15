@@ -71,7 +71,10 @@ allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, Tas
 親の `Bash` ツールで 1 回だけ実行し、`<output-dir>/diff.patch` に保存する:
 
 - PR モード: `gh pr diff <PR 番号> > <output-dir>/diff.patch`
-- ローカルモード: `git diff <base>...HEAD > <output-dir>/diff.patch`(`<base>` は `tmp/config.json` の `base_branch`。無ければ `git remote show origin` の HEAD branch を検出して `tmp/config.json` に保存する)
+- ローカルモード: `origin/<base>` との merge-base を起点に、**コミット済み・未コミット・新規作成(untracked)のすべて**を含めて出力する(`<base>` は `tmp/config.json` の `base_branch`。無ければ `git remote show origin` の HEAD branch を検出して `tmp/config.json` に保存する)。ローカルの `<base>` は古いことがあるため必ず `origin/` を付ける。`/implement` の `diff.patch` と同じ生成式なので、同じパスに上書きしてもビューアの表示は壊れない:
+  ```bash
+  { git diff "$(git merge-base HEAD origin/<base> 2>/dev/null || echo HEAD)" -- . ':!tmp'; git ls-files --others --exclude-standard -- . ':!tmp' | while IFS= read -r f; do git diff --no-index /dev/null "$f" || true; done; } > <output-dir>/diff.patch
+  ```
 
 ### 3. コンテキストをファイルに書き出す（1 回だけ）
 

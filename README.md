@@ -33,6 +33,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | prototype | `/prototype [アイデア]` | アイデアの壁打ち（発散→収束）から、スタック選定・実装・動作確認・デモ整備・フィードバックループまで一気通貫でプロトタイプを作る |
 | open | `/open <path>` | ファイルやフォルダを種別に応じて開き分ける（`.md` は grip でブラウザ表示、`.html` はブラウザ表示、フォルダは Finder、その他は Antigravity IDE）。ブラウザは `.agents/skills-config/open/config.json` でテスト用 Chrome プロファイル等を指定。未設定なら初回に質問して保存。同じ URL のタブが開いていればタブを増やさずリロード（CDP 経由） |
 | copy | `/copy <path\|text>` | ファイルの中身・テキスト・会話中の直前の出力をクリップボードにコピー（画像は osascript で画像としてコピー） |
+| cleanup-branches | `/cleanup-branches [ベースブランチ] [--dry-run] [-y]` | マージ済みのローカルブランチを検出して削除（squash / rebase マージ済みも判定。一覧を確認してから削除し、リモートブランチには触れない）。保護ブランチは `.agents/skills-config/cleanup-branches/config.json` で追加 |
 | export | `/export [html\|md] [出力先]` | 会話で直近に調べた・生成した内容を HTML / Markdown ファイルに書き出す（未指定なら html で `tmp/` に保存）。出力後は open スキルのルールで自動的に開く |
 | report | `/report [指示 \| <既存 .html>] [--type 調査\|比較\|解説\|その他]` | 会話の成果（調査・比較・解説など）を HTML レポートにまとめ、crit preview で開いてコメント対応まで往復する。生成前に型ごとの質問で前提を確認し、図表を変えた時はスクリーンショットで点検する。連携は crit のみ |
 

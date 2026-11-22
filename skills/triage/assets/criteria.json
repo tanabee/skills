@@ -1,84 +1,87 @@
 {
-  "_comment": "Tier triage questions and thresholds for /triage. Questions are in English (Jev accuracy is best in English; CJK is accepted but less accurate per https://docs.typesafe.ai/models). State may contain Japanese, but the runner prepends an English summary (summary_en) at stage=initial. Thresholds are initial values: calibrate against real triage.json history (source: jev vs user overrides).",
-  "model": "jev-latest",
+  "_comment": "Tier triage questions and thresholds for /triage using Gemini Decisions API (gemini-decision-1). Questions are in English; Japanese issue text is accepted directly without summary_en translation. Thresholds are calibrated against real issue history.",
+  "model": "gemini-decision-1",
+  "endpoint": "https://generativelanguage.googleapis.com/v1beta/decisions",
   "questions": {
     "is_local_change": {
       "type": "noul",
-      "instructions": "Can this change be completed by editing at most two files while following an existing pattern in the codebase, with acceptance criteria that are already explicit and testable?",
+      "instructions": "Can this change be completed by editing at most two files while following an existing pattern in the codebase, with a clear and bounded fix?",
       "criteria": {
-        "true": "A typo, label, copy, style, config value, or a single field added to an existing structure; the issue text and signals show a small, well-understood edit",
-        "false": "New logic, several files, a new screen or flow, or anything whose scope is not obvious from the issue"
+        "true_description": "A typo, label, copy, style, config/rule edit, input validation guard, null check, or a single focused bugfix in 1-2 files following an existing pattern",
+        "false_description": "New feature logic across multiple files, a new screen or flow, architectural changes, or anything whose blast radius is wide or unclear"
       }
     },
     "touches_side_effects": {
       "type": "noul",
-      "instructions": "Does the change write to a datastore collection or table, publish an event or message, enqueue a job, call an external service, or change a config key or feature flag that other code reads?",
+      "instructions": "Does the implementation itself modify persistent write behavior, data schemas, event/trigger firing, job enqueuing, external API delivery, or shared runtime config/auth rules in a way that risks breaking existing downstream flows?",
       "criteria": {
-        "true": "The issue or signals mention writes, triggers, subscribers, jobs, notifications, external APIs, or config keys; or side-effect identifiers were found",
-        "false": "Read-only or purely presentational change with no write path and no identifiers found"
+        "true_description": "Adds or alters datastore write paths, schemas, trigger/subscriber behavior, background job execution, external webhook/mail delivery payloads, or broad production deploy/auth workflows",
+        "false_description": "Read-only query/validation guard, input sanitization, null handling, logging/Sentry filtering, or purely presentational UI change, even if datastore or external service names (e.g., Firestore, BigQuery, Sentry) are mentioned in the issue"
       }
     },
     "requires_design_choice": {
       "type": "noul",
       "instructions": "Are there materially different implementation approaches for this issue whose choice would change the architecture, data model, or module boundaries?",
       "criteria": {
-        "true": "Multiple candidate approaches with close recommendation scores, a new subsystem or integration, or a change in how data is stored or flows",
-        "false": "One obvious approach following existing patterns; candidates differ only in minor details"
+        "true_description": "Multiple candidate approaches with close trade-offs, a new subsystem or external integration, or a structural change in how data is stored, authenticated, or flows across services",
+        "false_description": "One obvious fix or approach following existing patterns; candidates differ only in minor implementation details"
       }
     },
     "ac_is_ambiguous": {
       "type": "noul",
-      "instructions": "Are the acceptance criteria missing, or too vague to test without asking the issue author?",
+      "instructions": "Is the expected behavior or success condition unclear to the point that implementation cannot proceed without asking the issue author?",
       "criteria": {
-        "true": "No acceptance criteria, or several unverified assumptions had to be recorded, or the expected behavior for main cases is not stated",
-        "false": "Acceptance criteria are listed and each can be verified by a concrete check"
+        "true_description": "The goal, target behavior, or scope is genuinely ambiguous and requires product/author clarification before coding",
+        "false_description": "The bug, vulnerability, or desired behavior is concrete enough to verify even if a formal 'Acceptance Criteria' bullet list is omitted"
       }
     },
     "has_ui_change": {
       "type": "noul",
       "instructions": "Does the change alter anything a user can see or interact with in the UI?",
       "criteria": {
-        "true": "Screens, components, copy, layout, or interactions change",
-        "false": "Backend, data, infrastructure, or tooling only"
+        "true_description": "Screens, components, copy, layout, or user interactions change",
+        "false_description": "Backend, API, security rules, data pipeline, infrastructure, or tooling only"
       }
     }
   },
   "thresholds": {
-    "_comment": "Evaluated top-down; first match wins. Values are Noul probabilities (0-1). A match is rejected (falls through) when any criterion the matched rule references has a score inside uncertain_band; the result is then default with uncertain=true.",
+    "_comment": "Evaluated top-down; first match wins. Values are Noul probabilities (0.01-0.99). For uncertain_band (0.4-0.6), check ONLY the criteria belonging to the specific satisfied branch (for OR rules, if one branch is clearly satisfied outside the band, do not reject because the other branch is inside the band). If rejected, fall back to default (M) with uncertain=true.",
     "uncertain_band": [
       0.4,
       0.6
     ],
-    "XL": "requires_design_choice >= 0.7 || ac_is_ambiguous >= 0.7",
-    "L": "touches_side_effects >= 0.6",
+    "XL": "requires_design_choice >= 0.7 || (ac_is_ambiguous >= 0.7 && is_local_change < 0.5)",
+    "L": "touches_side_effects >= 0.7",
     "S": "is_local_change >= 0.8 && touches_side_effects < 0.3 && requires_design_choice < 0.3",
     "default": "M",
     "stage_overrides": {
-      "_comment": "At stage=initial the state is issue text (often Japanese) plus a light grep, so S is held to a stricter bar: skipping research on a misjudged S is the costliest error.",
+      "_comment": "At stage=initial, issues often omit formal AC bullets so ac_is_ambiguous alone must not trigger XL (deferred to stage=confirm after research). Also, tightly local fixes (is_local_change >= 0.85) do not jump to L solely on side-effect keywords; S remains strict because skipping research on a misjudged S is costly.",
       "initial": {
-        "S": "is_local_change >= 0.85 && touches_side_effects < 0.2 && requires_design_choice < 0.2 && ac_is_ambiguous < 0.3"
+        "XL": "requires_design_choice >= 0.7",
+        "L": "touches_side_effects >= 0.75 && is_local_change < 0.85",
+        "S": "is_local_change >= 0.85 && touches_side_effects < 0.25 && requires_design_choice < 0.2 && ac_is_ambiguous < 0.4"
       }
     }
   },
   "promote": {
-    "_comment": "Rule-based (no Jev). Applied at stage=promote using plan.md. Only ever raises the tier by one level.",
+    "_comment": "Rule-based (no API call). Applied at stage=promote using plan.md. Only ever raises the tier by one level.",
     "side_effect_identifiers_min_for_L": 1,
     "tasks_min_for_L": 5,
     "side_effect_identifiers_min_for_XL": 3
   },
   "fallback": {
-    "_comment": "When Jev is unavailable, the triage runner answers the same questions with a probability 0-1 each, in JSON, using only the same state. Same thresholds apply. The runner is whatever /dev launched triage on (Claude Code: dev-opus-medium = Opus 5.5; agy: gemini-4-hydrogen-medium, both pinned by full ID); 'model' here documents that choice and is not itself used to launch anything. Never Opus 5 or older.",
+    "_comment": "When Gemini Decisions API is unavailable, the triage runner answers the same questions with a probability 0-1 each, in JSON, using only the same state. Same thresholds apply. The runner is whatever /dev launched triage on (Claude Code: dev-opus-medium = Opus 5.5; agy: gemini-4-hydrogen-medium, both pinned by full ID); 'model' here documents that choice and is not itself used to launch anything. Never Opus 5 or older.",
     "model": "opus-5.5+ (dev-opus-medium) / gemini-4-hydrogen-medium",
     "effort": "medium",
     "timeout_seconds": 10
   },
   "state_preparation": {
-    "_comment": "Applied by the triage runner before calling Jev or the fallback.",
+    "_comment": "Applied by the triage runner before calling Gemini Decisions API or the fallback.",
     "initial": {
-      "summary_en": "The runner writes a 3-5 sentence English summary of the issue containing only facts (what changes, where, for whom, any named files/collections/screens, whether acceptance criteria are stated). No opinions, no tier guess. Placed as the first field of state; the original title/body/labels follow unchanged so identifiers stay searchable."
+      "note": "Pass Japanese/English issue title, body, labels, and light grep counts directly as JSON string in 'input'. No summary_en translation required for gemini-decision-1."
     },
     "confirm": {
-      "note": "State is numeric signals from research.md; language has little effect. No summary needed."
+      "note": "State is numeric signals from research.md serialized as JSON string in 'input'."
     }
   }
 }

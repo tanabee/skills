@@ -9,7 +9,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | スキル | コマンド | 説明 |
 |-------|---------|------|
 | dev | `/dev <issue> [auto\|normal] [S\|M\|L\|XL\|fixed:<model>[/<effort>]\|full]` | triage → research → plan → review-plan → capture (before) → implement → create-pr-text → test → review → quiz → notify-discord を一気通貫で実行。難易度 tier に応じてステップのモデル・スキップを切り替える |
-| triage | `/triage <issue> <initial\|confirm\|promote>` | issue の難易度 tier（S / M / L / XL）を判定。判定は TypeSafe AI（Jev）、不通時は Claude が同じ基準で代行。`/dev` から内部呼び出し |
+| triage | `/triage <issue> <initial\|confirm\|promote>` | issue の難易度 tier（S / M / L / XL）を判定。判定は Gemini Decisions API（`gemini-decision-1`）、不通時は実行中の LLM が同じ基準で代行。`/dev` から内部呼び出し |
 | research | `/research <issue> [mode] [tier]` | 受け入れ条件・影響範囲・実装方法の候補を整理する（選択は plan に委ねる） |
 | plan | `/plan <issue> [mode] [lite]` | research の結果をもとに実装方法を選択し、TDD ベースの実装計画と動作確認チェックリストを作成（`lite` は S tier 向けの簡易計画） |
 | review-plan | `/review-plan <issue>` | plan の影響範囲を独立視点で検証し、修正必須/任意改善として差し戻す |
@@ -18,7 +18,7 @@ GitHub Issue 駆動開発を中心とした Claude Code スキル集です。
 | create-pr-text | `/create-pr-text <issue>` | Issue と計画から PR タイトル・説明文を作成（PR 自体は作成しない。UI 変更がある場合は before / after 比較テーブルを含める） |
 | test | `/test <issue>` | chrome-devtools でチェックリストに沿ってブラウザ動作確認を実行し、UI 変更があれば前後比較 (compare.html) を生成 |
 | review | `/review <issue> [tier]` | Antigravity (agy)・Claude (fable)・Codex (astra) の 3 者を並列実行してコードレビュー（全観点を網羅）し、結果を統合 |
-| codex-review | `/codex-review` | Codex CLI (`gpt-6-astra`) にコードレビューを依頼（`/review` から内部呼び出しされる。単独実行も可） |
+| codex-review | `/codex-review` | Codex CLI (`gpt-6.2-astra`) にコードレビューを依頼（`/review` から内部呼び出しされる。単独実行も可） |
 | quiz | `/quiz [<issue\|PR>] [interactive]` | 変更内容の解説（explainer）と理解確認クイズを生成。空指定なら現在のブランチ差分が対象 |
 | pr-comment | `/pr-comment <コメントURL>` | PR レビューコメントの妥当性をコードベースで独立検証し、判定（must/should/nit）と返信文案を作成（返信の投稿は行わない） |
 

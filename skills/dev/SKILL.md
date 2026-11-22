@@ -167,7 +167,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 2. 指定が無ければ、セットアップ直後に `triage-initial` を実行して仮 tier を得る(S の見極めが目的。迷えば M になる)
 3. research 完了後に `triage-confirm` で確定する。**以降のステップの model / effort・スキップはこの結果で決める**
 4. plan 完了後に `triage-promote` を実行し、昇格があれば以降に反映する(降格はしない)
-5. tier が確定・変化するたびに dev-state.json の `tier` / `tier_source` を更新し、`normal` モードでは確定時に 1 回だけ「tier と各ステップの model / effort(実行形態表の該当列)」を提示して続行可否を確認する(`auto` は提示のみで続行)。triage が `source: default`(Jev も fallback も失敗)を返した場合は mode に関わらず確認する
+5. tier が確定・変化するたびに dev-state.json の `tier` / `tier_source` を更新し、`normal` モードでは確定時に 1 回だけ「tier と各ステップの model / effort(実行形態表の該当列)」を提示して続行可否を確認する(`auto` は提示のみで続行)。triage が `source: default`(Gemini Decisions API も fallback も失敗)を返した場合は mode に関わらず確認する
 
 ## 状態の永続化(dev-state.json)
 
@@ -179,7 +179,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
   "issue_url": "https://github.com/<owner>/<repo>/issues/123",
   "mode": "normal",
   "tier": "M",
-  "tier_source": "jev",
+  "tier_source": "gemini-decision",
   "fixed": null,
   "checkpoints": ["plan", "review"],
   "skips": ["quiz"],

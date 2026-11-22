@@ -4,9 +4,9 @@ description: Antigravity (agy)・Claude (fable)・Codex (astra) の 3 者によ�
 allowed-tools: Bash, Read, Write, Glob, Grep, Agent, Skill, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 ---
 
-**Antigravity (`agy`: `gemini-4-argon-high`)**・**Claude (`fable`: `claude-fable-5-1`)**・**Codex (`astra`: `gpt-6-astra`)** の 3 者で並列にコードレビューを行い、**本スキルを実行している AI（親）が結果を統合**する。実行環境（agy / Claude Code / Codex CLI 等）を問わず、常にこの 3 レビュアーが独立した視点でレビューを実施する。
+**Antigravity (`agy`: `gemini-4-argon-high`)**・**Claude (`fable`: `claude-fable-5-2`)**・**Codex (`astra`: `gpt-6.2-astra`)** の 3 者で並列にコードレビューを行い、**本スキルを実行している AI（親）が結果を統合**する。実行環境（agy / Claude Code / Codex CLI 等）を問わず、常にこの 3 レビュアーが独立した視点でレビューを実施する。
 
-**効率化の肝**: 差分取得・PR/Issue 情報収集・ローカル成果物読み込みは**親（本スキル本体）で 1 回だけ**実行し、`diff.patch` と `context.html` としてディスクに書き出す。agy レビュアーと Claude レビュアーはこの 2 ファイルを Read するだけで共通コンテキストを得られる。Codex 側は別レビュアーの独立視点として `/codex-review`（`gpt-6-astra`）を呼び出す。
+**効率化の肝**: 差分取得・PR/Issue 情報収集・ローカル成果物読み込みは**親（本スキル本体）で 1 回だけ**実行し、`diff.patch` と `context.html` としてディスクに書き出す。agy レビュアーと Claude レビュアーはこの 2 ファイルを Read するだけで共通コンテキストを得られる。Codex 側は別レビュアーの独立視点として `/codex-review`（`gpt-6.2-astra`）を呼び出す。
 
 ## 引数
 
@@ -157,9 +157,9 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 - **実行環境が Claude Code（`subagent_type` を取る Agent ツールがある）の場合**:
   - Agent ツールで `subagent_type: dev-fable-high`（`fixed:<model>/<effort>` 指定時のみ `dev-<model>-<effort>`。`model` 引数は渡さない）を起動し、共通プロンプト（`<output-file> = review-claude.html`）を実行させる
 - **実行環境が Claude Code 以外（agy 等）の場合**:
-  - 共通プロンプト（`<output-file> = review-claude.html`）を `<output-dir>/prompt-claude.txt` に Write し、Bash ツールで `claude` CLI を `claude-fable-5-1`（effort `high`）で非対話実行する（`</dev/null` で stdin を閉じる）:
+  - 共通プロンプト（`<output-file> = review-claude.html`）を `<output-dir>/prompt-claude.txt` に Write し、Bash ツールで `claude` CLI を `claude-fable-5-2`（effort `high`）で非対話実行する（`</dev/null` で stdin を閉じる）:
     ```bash
-    claude -p --model claude-fable-5-1 --effort high --dangerously-skip-permissions --allowedTools "Read,Write,Grep,Glob,Bash(git grep:*),Bash(rg:*)" "$(cat <output-dir 絶対パス>/prompt-claude.txt)" </dev/null
+    claude -p --model claude-fable-5-2 --effort high --dangerously-skip-permissions --allowedTools "Read,Write,Grep,Glob,Bash(git grep:*),Bash(rg:*)" "$(cat <output-dir 絶対パス>/prompt-claude.txt)" </dev/null
     ```
 
 #### 4-C. Codex (astra) レビュー（出力: `<output-dir>/review-codex.html`）
@@ -167,7 +167,7 @@ CSS による重要度の色分け（must=赤 / should=黄 / nit=灰）、観点
 - **Skill ツールがある場合（Claude Code 等）**:
   - `Skill` ツールで `codex-review` を呼び出す。`args` には `$ARGUMENTS` の `<対象>`（PR 番号 / URL / 空文字列）を渡す
 - **Skill ツールが無い場合（agy 等）**:
-  - 本スキルの隣にある `codex-review` スキル（`<codex-review-dir>` = `<本スキルのディレクトリ>/../codex-review`、例: `.agents/skills/codex-review` または `skills/codex-review`）の `SKILL.md` の手順に従い、`<codex-review-dir>/scripts/run-codex-review.sh --base origin/<BASE>`（`--model gpt-6-astra` がデフォルト適用される）を Bash で実行し、その stdout の指摘内容を `<codex-review-dir>/assets/template.html` に準拠した HTML として `<output-dir>/review-codex.html` に書き出す
+  - 本スキルの隣にある `codex-review` スキル（`<codex-review-dir>` = `<本スキルのディレクトリ>/../codex-review`、例: `.agents/skills/codex-review` または `skills/codex-review`）の `SKILL.md` の手順に従い、`<codex-review-dir>/scripts/run-codex-review.sh --base origin/<BASE>`（`--model gpt-6.2-astra` がデフォルト適用される）を Bash で実行し、その stdout の指摘内容を `<codex-review-dir>/assets/template.html` に準拠した HTML として `<output-dir>/review-codex.html` に書き出す
 
 #### 並列発行の方法
 

@@ -1,7 +1,7 @@
 ---
 name: dev-fable-high
-description: /dev のパイプラインの 1 ステップを Fable 5.1・effort=high で実行する汎用 subagent。model はこの定義で固定し、Agent ツールの model 引数は渡さない(エイリアス `opus` は環境により Opus 5 に解決されるため)。/dev の実行形態表からのみ起動し、自動委譲の対象にはしない
-model: claude-fable-5-1
+description: /dev のパイプラインの 1 ステップを Fable 5.2・effort=high で実行する汎用 subagent。model はこの定義で固定し、Agent ツールの model 引数は渡さない(エイリアス `opus` は環境により Opus 5 に解決されるため)。/dev の実行形態表からのみ起動し、自動委譲の対象にはしない
+model: claude-fable-5-2
 effort: high
 ---
 

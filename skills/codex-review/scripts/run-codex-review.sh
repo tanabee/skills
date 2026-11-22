@@ -1,6 +1,6 @@
 #!/bin/sh
 # run-codex-review.sh - Codex 公式プラグイン (codex@openai-codex) の companion runtime で
-# Codex ネイティブレビュー (デフォルト: gpt-6-astra) を起動する薄いラッパー
+# Codex ネイティブレビュー (デフォルト: gpt-6.2-astra) を起動する薄いラッパー
 #
 # Usage:
 #   run-codex-review.sh [--cwd <dir>] [--base <ref>] [--model <model>] [--scope auto|working-tree|branch]
@@ -46,7 +46,7 @@ for arg in "$@"; do
 done
 
 if [ "$has_model" -eq 0 ]; then
-  set -- --model gpt-6-astra "$@"
+  set -- --model gpt-6.2-astra "$@"
 fi
 
 exec node "${root}scripts/codex-companion.mjs" review "$@" </dev/null

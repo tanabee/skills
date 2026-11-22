@@ -16,7 +16,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 - `[tier]`: 難易度。`S` / `M` / `L` / `XL` / `fixed:<model>[/<effort>]` / `full`。省略時は `/triage` が判定する。指定時は triage を一切呼ばない
   - `fixed:<model>[/<effort>]`: tier 判定もスキップもせず、**全ステップを指定した model / effort で実行する**
     - Claude Code 環境: 例 `fixed:opus/high`。`full` は `fixed:fable/xhigh` の別名
-    - Antigravity (`agy`) 環境: 例 `fixed:hydrogen/xhigh`、`fixed:carbon/high`(フル ID `fixed:gemini-4-carbon-high` 形式も可)。`full` は `fixed:carbon/high`(`gemini-4-carbon-high`)の別名
+    - Antigravity (`agy`) 環境: 例 `fixed:hydrogen/xhigh`、`fixed:neon/xhigh`(フル ID `fixed:gemini-4-neon-xhigh` や `fixed:gemini-pro-orchestrator-neon` 形式も可)。`full` は `fixed:neon/xhigh`(`gemini-4-neon-xhigh`)の別名
 
 ## ステップ定義表
 
@@ -46,8 +46,8 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 実行環境ごとに **フル ID で model と effort を固定**し、各ステップを別コンテキストとして起動する(inline で動くのは dev 本体だけ)。
 
-- **Claude Code(`runtime: "claude-code"`、`subagent_type` を取る Agent ツールがある環境)**: 値は `agent:<model>/<effort>` / `skip`。Agent ツールの `subagent_type` に **`dev-<model>-<effort>`** を指定し、**`model` 引数は渡さない**(フロントマターで `opus` = `claude-opus-5-5[1m]`、`fable` = `claude-fable-5-1` に固定。`model: opus` エイリアスは環境により Opus 5 に解決されるため使わない)。セッションは **Opus 5.5 以上**を推奨(※4)
-- **Antigravity(`runtime: "agy"`、`invoke_subagent` / `ask_question` ツールがある環境)**: 値は `cli:<full-id>` / `skip`。`run_command` で **`agy -p --mode auto --output-format json --model <full-id> --dangerously-skip-permissions`** を非対話起動し、フル ID(`gemini-4-{carbon,argon,hydrogen}-{low,medium,high,xhigh}`)で厳密に固定する。`invoke_subagent`・`.agents/agents/*.md`・`run_workflow` の `model` は粗いエイリアス(`pro` / `flash` / `flash_lite` / `inherit`)しか受け付けないため使わない。セッションは **Gemini 4 Hydrogen(`gemini-4-hydrogen-medium` 等)** を推奨(※4)
+- **Claude Code(`runtime: "claude-code"`、`subagent_type` を取る Agent ツールがある環境)**: 値は `agent:<model>/<effort>` / `skip`。Agent ツールの `subagent_type` に **`dev-<model>-<effort>`** を指定し、**`model` 引数は渡さない**(フロントマターで `opus` = `claude-opus-5-5[1m]`、`fable` = `claude-fable-5-2` に固定。`model: opus` エイリアスは環境により Opus 5 に解決されるため使わない)。セッションは **Opus 5.5 以上**を推奨(※4)
+- **Antigravity(`runtime: "agy"`、`invoke_subagent` / `ask_question` ツールがある環境)**: 値は `cli:<full-id>` / `skip`。`run_command` で **`agy -p --mode auto --output-format json --model <full-id> --dangerously-skip-permissions`** を非対話起動し、フル ID(`gemini-4-{carbon,neon,argon,hydrogen}-{low,medium,high,xhigh}` および `gemini-pro-orchestrator-neon`)で厳密に固定する。`invoke_subagent`・`.agents/agents/*.md`・`run_workflow` の `model` は粗いエイリアス(`pro` / `flash` / `flash_lite` / `inherit`)しか受け付けないため使わない。セッションは **Gemini 4 Hydrogen(`gemini-4-hydrogen-medium` 等)** を推奨(※4)
 - **その他の実行環境(Codex CLI・Cursor 等)**: 表を使わず全ステップ inline(後述「Claude Code・agy 以外の実行環境」)
 
 #### Claude Code の実行形態表
@@ -76,18 +76,18 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 | ステップ | S | M | L | XL | fixed:\<model\>[/\<effort\>] |
 |---|---|---|---|---|---|
 | triage-initial | cli:gemini-4-hydrogen-medium(tier 引数指定時は skip) | ← | ← | ← | skip |
-| research | skip | cli:gemini-4-hydrogen-high | cli:gemini-4-carbon-high | cli:gemini-4-carbon-high | cli:\<full-id\> |
+| research | skip | cli:gemini-4-hydrogen-high | cli:gemini-4-neon-high | cli:gemini-4-carbon-high | cli:\<full-id\> |
 | └ ファンアウト(research 内) | — | gemini-4-hydrogen-low | gemini-4-hydrogen-medium | gemini-4-hydrogen-medium | \<full-id\> |
 | triage-confirm | skip | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | skip |
-| plan | cli:gemini-4-hydrogen-medium(lite) | cli:gemini-4-carbon-high | cli:gemini-4-carbon-high | cli:gemini-4-carbon-high | cli:\<full-id\> |
+| plan | cli:gemini-4-hydrogen-medium(lite) | cli:gemini-4-neon-high | cli:gemini-4-neon-xhigh | cli:gemini-4-carbon-high | cli:\<full-id\> |
 | triage-promote | skip | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | skip |
 | review-plan | skip | cli:gemini-4-hydrogen-high ※1 | cli:gemini-4-argon-high ※5 | cli:gemini-4-carbon-high | cli:\<full-id\> |
 | capture-before | skip | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:\<full-id\> |
-| implement | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-xhigh | cli:gemini-4-hydrogen-xhigh | cli:gemini-4-carbon-high ※3 | cli:\<full-id\> |
+| implement | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-xhigh | cli:gemini-4-hydrogen-xhigh | cli:gemini-pro-orchestrator-neon ※3 | cli:\<full-id\> |
 | create-pr-text | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-medium | cli:\<full-id\> |
 | test | cli:gemini-4-hydrogen-low ※2 | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | cli:\<full-id\> |
 | review(親: 収集・統合) | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:\<full-id\> |
-| └ 3 者レビュアー(review 内) | gemini-4-argon-high(正確性・副作用のみ) + Fable + Astra | gemini-4-argon-high + Fable + Astra | ← | ← | 既存維持 ※6 |
+| └ 3 者レビュアー(review 内) | gemini-4-argon-high(正確性・副作用のみ) + Fable 5.2 + GPT-6.2 Astra | gemini-4-argon-high + Fable 5.2 + GPT-6.2 Astra | ← | ← | 既存維持 ※6 |
 | quiz | skip | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-medium | cli:gemini-4-hydrogen-medium | cli:\<full-id\> |
 | notify-discord | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:gemini-4-hydrogen-low | cli:\<full-id\> |
 | dev 本体(状態管理・DoD ゲート・config 学習・質問リレー) | inline(セッションモデル。**Gemini 4 Hydrogen (`gemini-4-hydrogen-medium` 等) を推奨** ※4) | ← | ← | ← | inline |
@@ -95,17 +95,17 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 - triage-initial は tier が未確定の時点で実行するため、tier 引数が無い限り常に `agent:opus/medium`(Claude Code)/ `cli:gemini-4-hydrogen-medium`(agy)
 - ※1 M の review-plan は、plan.md の「副作用 identifier」セクションが空 **かつ** `.agents/skills-config/review-plan/config.json` の `attentions` に plan の変更対象へ該当する項目が無い場合、dev が自動スキップしてよい(dev-state.json に理由を記録)
 - ※2 S の test は checklist の内容に従う(UI 変更が無ければ unit テスト項目だけになり、ブラウザ操作は発生しない)
-- ※3 **XL だけ implement を Fable / Carbon に残す**。XL の定義が「実装方式の候補間でアーキテクチャが変わる / AC が未確定」であり、**plan が具体的になりえない**(実装時にしか決まらない判断が本質的に残る)ため。M / L は plan が「探索の代替」(正確なパス・シグネチャ・テストケース。`/plan` の「記述の原則」)まで書けている前提で Opus / Hydrogen に落とす。**M / L の effort は常に xhigh**(`dev-opus-xhigh` / `gemini-4-hydrogen-xhigh` — Hydrogen は Gemini 4 で唯一 `xhigh` を持つ): 低 effort はツール呼び出しを統合してターン数を減らすが、implement で減るのは**検証のターン**(テスト実行・変更後の再読・確認)であり、安くなった分だけ確認を省いた実装になるため
-- **M / L で plan が曖昧だった場合の守りは予測ではなく feedback で行う**: implement が二回目の設計をして失敗したら、test 失敗ループの内側(implement 単独リトライ。**Fable / Carbon 消費 0**)が拾い、実装では直せないと判断したら `status: needs-replan` で plan 巻き戻しに出る(後述)。内側リトライが安いので、plan 具体度を事前に採点して model を振り分ける機構は置かない(指標を増やすと較正対象が増え、判定を外したときの切り分けも難しくなる)
+- ※3 **XL だけ implement を Fable / `gemini-pro-orchestrator-neon` に残す**。XL の定義が「実装方式の候補間でアーキテクチャが変わる / AC が未確定」であり、**plan が具体的になりえない**(実装時にしか決まらない判断が本質的に残る)ため。agy の XL 実装では、設計判断を Neon・ファイル編集とテスト実行を Hydrogen サブエージェントへ自動分業する `gemini-pro-orchestrator-neon` を採用する。M / L は plan が「探索の代替」(正確なパス・シグネチャ・テストケース。`/plan` の「記述の原則」)まで書けている前提で Opus / Hydrogen に落とす。**M / L の effort は常に xhigh**(`dev-opus-xhigh` / `gemini-4-hydrogen-xhigh`): 低 effort はツール呼び出しを統合してターン数を減らすが、implement で減るのは**検証のターン**(テスト実行・変更後の再読・確認)であり、安くなった分だけ確認を省いた実装になるため
+- **M / L で plan が曖昧だった場合の守りは予測ではなく feedback で行う**: implement が二回目の設計をして失敗したら、test 失敗ループの内側(implement 単独リトライ。**Fable / Neon / Carbon 消費 0**)が拾い、実装では直せないと判断したら `status: needs-replan` で plan 巻き戻しに出る(後述)。内側リトライが安いので、plan 具体度を事前に採点して model を振り分ける機構は置かない(指標を増やすと較正対象が増え、判定を外したときの切り分けも難しくなる)
 - ※4 **dev 本体はセッションモデルで動く唯一の部分**。13 ステップの起動・要約の受領・state 更新・HTML オープン・DoD 判定・質問リレーで **80〜100 ターン**を回し、毎ターン文脈全体を再送する(SKILL.md だけで 12〜15k、終盤 30k 前後)。
   - **Claude Code**: セッションが Fable だと **どのステップより多く Fable 枠を消費しうる**(幅 50k〜2M)。dev 本体の判断(DoD 証跡の照合・attentions 追記要否・チェックポイント報告)は Opus で足りるので、**セッションは Opus 5.5 以上を推奨**(`/model` の選択肢から明示的に選ぶ。`opus` エイリアスは Opus 5 を指しうるので使わない)
-  - **agy**: Carbon・Argon・Hydrogen・Orchestrator は**同一の Gemini クォータ枠**を共有するため、セッションが Carbon / Argon / Orchestrator だと 80〜100 ターンのオーケストレーションで共通枠を大きく削る。dev 本体は **Gemini 4 Hydrogen(`gemini-4-hydrogen-medium` 推奨)** で動かす。表の Carbon / Argon 配置はセッションモデルに依存せず、切り替えても各ステップの model は変わらない
-- ※5 **agy における Argon の役割(独立監査役への限定)**: Argon は API 単価・消費重みが Carbon と同帯である一方、コーディング・ターミナル指標は Hydrogen(`high` / `xhigh`)と同等以下のため、日常の実装や作業ステップには使わない。Argon の用途は **Carbon が作成した計画・実装を別の推論傾向で検証する独立監査** に絞り、L の `review-plan` と `/review` の agy レビュアー(`gemini-4-argon-high`)に配置して Carbon の自己追認を防ぐ
-- ※6 `/review` 内の 3 者並列レビュー(`gemini-4-argon-high` + `claude-fable-5-1` + `gpt-6-astra`)は agy 実行時もそのまま維持する
+  - **agy**: Carbon・Neon・Argon・Hydrogen・Orchestrator は**同一の Gemini クォータ枠**を共有するため、セッションが Carbon / Neon / Argon / Orchestrator だと 80〜100 ターンのオーケストレーションで共通枠を大きく削る。dev 本体は **Gemini 4 Hydrogen(`gemini-4-hydrogen-medium` 推奨)** で動かす。表の Carbon / Neon / Argon 配置はセッションモデルに依存せず、切り替えても各ステップの model は変わらない
+- ※5 **agy における Argon の役割(独立監査役への限定)**: Argon は API 単価・消費重みが Carbon と同帯である一方、コーディング・ターミナル指標は Hydrogen(`high` / `xhigh`)と同等以下のため、日常の実装や作業ステップには使わない。Argon の用途は **Neon / Carbon が作成した計画・実装を別の推論傾向で検証する独立監査** に絞り、L の `review-plan` と `/review` の agy レビュアー(`gemini-4-argon-high`)に配置して同系統ファミリーの自己追認を防ぐ
+- ※6 `/review` 内の 3 者並列レビュー(`gemini-4-argon-high` + `claude-fable-5-2` + `gpt-6.2-astra`)は agy 実行時もそのまま維持する
 - 「└」の行はサブスキル内部で起動する Agent / 子プロセス。research / review が tier 引数から model / effort を決める
 - `fixed:` の検証と展開:
   - **Claude Code**: `dev-<model>-<effort>` で起動する。`<model>` が `opus` / `fable` 以外か effort が省略された場合は、**Opus 5 に落ちる可能性があるエイリアス起動はせず**、ユーザーに「定義が無い」と報告して停止する(`auto` でも)
-  - **agy**: `fixed:<model>/<effort>` は `gemini-4-<model>-<effort>` に展開する(`fixed:gemini-4-...` のフル ID 直接指定も可)。有効なフル ID は `gemini-4-carbon-{low,medium,high}`・`gemini-4-argon-{low,medium,high}`・`gemini-4-hydrogen-{low,medium,high,xhigh}` の **10 種のみ**。存在しない組み合わせ(例: `carbon/xhigh`、effort 省略)や粗いエイリアス(`pro` / `flash`)が指定された場合は fallback せず「定義が無い」と報告して停止する(`auto` でも)
+  - **agy**: `fixed:<model>/<effort>` は `gemini-4-<model>-<effort>` に展開する(`fixed:gemini-4-...` / `fixed:gemini-pro-orchestrator-neon` 等のフル ID 直接指定も可)。有効なフル ID は `gemini-4-carbon-{low,medium,high}`・`gemini-4-neon-{low,medium,high,xhigh}`・`gemini-4-argon-{low,medium,high}`・`gemini-4-hydrogen-{low,medium,high,xhigh}`・`gemini-pro-orchestrator-neon` の **15 種のみ**。存在しない組み合わせ(例: `carbon/xhigh`、effort 省略)や粗いエイリアス(`pro` / `flash`)が指定された場合は fallback せず「定義が無い」と報告して停止する(`auto` でも)
 - normal モードで質問が発生しうるステップ(research / plan / implement / test)は「質問リレー」で扱う(後述)。subagent / 子プロセス化のために auto に落とすことはしない
 - 線引きの原則: **判断が後段にカスケードするステップ(research 本体・plan・コードレビュアー・XL の review-plan / implement)だけ Fable / Carbon(および監査の Argon)に残し、作業・診断寄りのステップは Opus 5.5 / Hydrogen に落とす**。旧モデル・軽量モデル(Opus 5 以前 / Sonnet / Haiku / Gemini 3.8 Flash)は精度リスクを取ってまで使わず、安くしたければ Opus / Hydrogen の effort を下げる
 - **implement を Fable / Carbon から外す根拠**: implement は全ステップ中最大の消費源だが、plan が「探索の代替」になる具体度(正確なパス・シグネチャ・テストケース)まで書けていれば implement に残る判断は少なく、Opus 5.5 / Hydrogen(`xhigh`)で足りる。plan が具体的になりえない XL だけ Fable / Carbon に残す(※3)
@@ -127,7 +127,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
 
 - **判別**: 開始時に利用可能なツールを見て、`subagent_type` を取る Agent ツールがあれば `"claude-code"`、`invoke_subagent` / `ask_question` があれば `"agy"`、それ以外は「その他」(例 `"codex"`)として dev-state.json の `runtime` に記録する
 - **triage は 3 つとも skip**(tier は主に model 選択に効くもので、inline では判定の価値が薄い)。tier 引数があればそのスキップ集合とループ上限を使い、無ければ **`M` として扱う**(`tier_source: "runtime-default"`。何も skip しない)
-- **各ステップ**: ステップ定義表の順に、サブスキルを本会話内で実行する(Skill ツール相当が無ければサブスキルの SKILL.md を読んでその指示に従う)。`models` は全ステップ `inline` と記録し、並列グループは表の順の直列で実行する。サブスキル内部のファンアウト(research / review)は各 SKILL.md の規定に従う(review は agy・Claude (`claude -p --model claude-fable-5-1 --effort high`)・Codex (`gpt-6-astra`) の 3 者を並列実行し、統合は実行中の AI 自身が行う)
+- **各ステップ**: ステップ定義表の順に、サブスキルを本会話内で実行する(Skill ツール相当が無ければサブスキルの SKILL.md を読んでその指示に従う)。`models` は全ステップ `inline` と記録し、並列グループは表の順の直列で実行する。サブスキル内部のファンアウト(research / review)は各 SKILL.md の規定に従う(review は agy・Claude (`claude -p --model claude-fable-5-2 --effort high`)・Codex (`gpt-6.2-astra`) の 3 者を並列実行し、統合は実行中の AI 自身が行う)
 - **質問**: AskUserQuestion 相当の手段があればそれを、無ければ通常のメッセージで質問して回答を待つ。サブスキルも inline なので質問リレーは発生しない(サブスキルが直接質問する)。入力待ちの `waiting` 記録(後述)は同様に行う
 - **省くもの**: セッションモデルの確認(セットアップ質問 3)・エージェント定義の準備(`agents_ready: null`)・タスク管理ツールが無い環境での TaskCreate 系。成果物ビューアは `/open` 相当でブラウザを開けるなら開き、開けなければ各ステップ完了時に成果物パスを案内するだけにする(`viewer: false`)
 - それ以外(ステップ順・前提成果物・ループ・DoD・config 学習・チェックポイント)は Claude Code / agy と同じ
@@ -153,7 +153,7 @@ GitHub issue ( $ARGUMENTS ) に対して、計画から PR テキスト作成・
   - 「中断」が選ばれたら dev-state.json を書かずに終了し、`/model` で Opus 5.5 以上を選んで `/dev <同じ引数>` を再実行するよう案内する
 - **Antigravity (`agy`) 環境**:
   - **Gemini 4 Hydrogen(`gemini-4-hydrogen-*`)**: 何もしない(質問 3 は出さない)
-  - **Carbon / Argon / Orchestrator(および Claude Opus・Sonnet 等)**: 質問 3 を含める。理由は共通クォータ枠の大量消費(※4)
+  - **Carbon / Neon / Argon / Orchestrator(および Claude Opus・Sonnet 等)**: 質問 3 を含める。理由は共通クォータ枠の大量消費(※4)
   - **Gemini 3.8 Flash 等の旧・軽量モデル**: 質問 3 を含める。理由は dev 本体の判断精度(DoD 判定・config 学習)
   - 「中断」が選ばれたら dev-state.json を書かずに終了し、`/model` で `Gemini 4 Hydrogen (Medium)` 等を選んで `/dev <同じ引数>` を再実行するよう案内する
 - 「続行」なら `session_model` を dev-state.json に記録して進める(**auto でも質問 3 は出す**。セットアップ質問は mode の適用対象外)
